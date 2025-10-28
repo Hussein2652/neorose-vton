@@ -7,7 +7,7 @@ PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
 help:
-	@echo "Targets: install, api, demo, seed, compose-up, compose-up-s3, compose-down, migrate, react-dev"
+	@echo "Targets: install, api, demo, seed, compose-up, compose-up-s3, compose-down, migrate, react-dev, compose-up-monitoring, prefetch, verify-models"
 
 install:
 	python -m venv $(VENV)
@@ -41,3 +41,10 @@ react-dev:
 
 compose-up-monitoring:
 	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build prometheus grafana
+
+prefetch:
+	. $(VENV)/bin/activate || true; python scripts/prefetch_models.py --config configs/models.yaml --models-dir storage/models
+
+verify-models:
+	@echo "GET /v1/health/models; expecting ok=true"; \
+	curl -sf http://127.0.0.1:8000/v1/health/models | python -c 'import sys,json; d=json.load(sys.stdin); print("models_ok=", d.get("ok")); sys.exit(0 if d.get("ok") else 1)'
