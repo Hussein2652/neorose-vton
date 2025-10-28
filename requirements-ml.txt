@@ -1,0 +1,5 @@
+# Optional ML extras for enhanced QA and models
+torch
+torchvision
+lpips
+open-clip-torch

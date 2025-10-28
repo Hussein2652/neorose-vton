@@ -61,6 +61,20 @@ async def create_tryon_job(
         import uuid
 
         job_id = str(uuid.uuid4())
+        # Optional plan quota enforcement
+        try:
+            if user_id:
+                from .db import ensure_user, get_plan, get_month_usage_units
+                u = ensure_user(user_id)
+                p = get_plan(u.plan) if u else None
+                if p and p.monthly_limit is not None:
+                    used = get_month_usage_units(user_id)
+                    if used >= p.monthly_limit:
+                        raise HTTPException(status_code=402, detail="Quota exceeded; upgrade plan")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         if USE_CELERY:
             async_result = run_tryon_task.delay(
                 job_id=job_id,

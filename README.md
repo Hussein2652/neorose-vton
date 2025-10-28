@@ -210,6 +210,11 @@ Notes
  - Optional segmentation: uses OpenCV GrabCut when available (opencv-python); otherwise a full mask.
  - Control maps: generated under `storage/results/work/controls/` to approximate ControlNet inputs.
  - VTON stage: enabled by default (`vton.enabled: true` in configs); creates a blended soft render for the finisher.
+ - Optional ML QA extras: install via `pip install -r requirements-ml.txt` to enable LPIPS and CLIP-like similarity; otherwise lightweight QA is used.
+
+Plans & Quotas
+- Plans table supports `monthly_limit` and `per_image_cost` (see Alembic 0004).
+- If `AUTH_REQUIRED=1` and a user is identified, the API enforces `monthly_limit` at job submission (returns 402 if exceeded).
 
 Admin & Billing
 - Admin list jobs: `GET /v1/admin/jobs` with header `x-admin-key: $ADMIN_API_KEY`

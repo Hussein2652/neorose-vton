@@ -10,6 +10,7 @@ from sqlalchemy import (
     Text,
     DateTime,
     Float,
+    Integer,
     select,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
@@ -122,6 +123,8 @@ class PlanORM(Base):
     max_res_long: Mapped[int] = mapped_column(
         String(16), default="1344"
     )  # keep as string for simplicity
+    monthly_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    per_image_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 
 class UserORM(Base):
@@ -213,3 +216,24 @@ def ensure_user(user_id: str, email: Optional[str] = None, default_plan: str = "
             s.commit()
         s.expunge(user)
         return user
+
+
+def get_plan(name: str) -> Optional[PlanORM]:
+    with Session(engine) as s:
+        p = s.get(PlanORM, name)
+        if not p:
+            return None
+        s.expunge(p)
+        return p
+
+
+def get_month_usage_units(user_id: str) -> float:
+    import datetime as dt
+    with Session(engine) as s:
+        now = dt.datetime.utcnow()
+        month_start = dt.datetime(now.year, now.month, 1)
+        q = s.query(UsageORM).filter(UsageORM.user_id == user_id, UsageORM.created_at >= month_start)  # type: ignore[attr-defined]
+        total = 0.0
+        for row in q:
+            total += float(row.units)
+        return total

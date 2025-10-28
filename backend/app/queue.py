@@ -60,7 +60,7 @@ class Jobs:
                     job_result_url = result.get("result_url") if isinstance(result, dict) else None
                 job.status = "completed"
                 try:
-                    from .db import update_job
+                    from .db import update_job, get_job, record_usage
                     from .cache import cache_set_job
                     from .metrics import jobs_completed, jobs_in_queue
 
@@ -69,6 +69,13 @@ class Jobs:
                     try:
                         jobs_completed.inc()
                         jobs_in_queue.dec()
+                    except Exception:
+                        pass
+                    # Usage accounting (in-process worker path)
+                    try:
+                        db_job = get_job(job.id)
+                        if db_job and db_job.user_id:
+                            record_usage(db_job.user_id, job.id, units=1.0, cost=0.0)
                     except Exception:
                         pass
                 except Exception:

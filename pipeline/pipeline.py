@@ -54,6 +54,21 @@ class VFRPipeline:
             "escalate_on_fail": bool(settings.get("finisher.escalate_on_fail", False)),
             "vton_enabled": bool(settings.get("vton.enabled", True)),
         }
+        # Feature flag overrides (best-effort)
+        try:
+            from backend.app.db import get_feature_flag  # type: ignore
+
+            fb = get_feature_flag("finisher_backend")
+            if fb:
+                cfg["finisher_backend"] = fb
+            vton_flag = get_feature_flag("vton_enabled")
+            if vton_flag is not None:
+                cfg["vton_enabled"] = vton_flag.lower() in ("1", "true", "yes")
+            esc_flag = get_feature_flag("escalate_on_fail")
+            if esc_flag is not None:
+                cfg["escalate_on_fail"] = esc_flag.lower() in ("1", "true", "yes")
+        except Exception:
+            pass
         return cls(cfg)
 
     def run(
