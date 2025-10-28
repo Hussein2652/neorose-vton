@@ -30,7 +30,7 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: Dockerfile.celery
+      dockerfile: ${DOCKERFILE_CELERY:-Dockerfile.api.gpu}
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -44,17 +44,24 @@ services:
       - PREFETCH_HF_MODELS=1
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8n/yolov8n-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
+      - S3_BUCKET=vfr
+      - S3_REGION=us-east-1
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_PREFIX=vfr/
     depends_on:
       - redis
       - postgres
     command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
     volumes:
       - app_storage:/app/storage
+    gpus: ${GPU_REQUEST:-all}
 
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: ${DOCKERFILE_API:-Dockerfile.api.gpu}
     environment:
       - USE_CELERY=1
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -78,6 +85,13 @@ services:
       - RL_WINDOW=60
       - REMOTE_FINISHER_URL=http://remote_worker:9000
       - REMOTE_VTON_URL=http://remote_worker:9000
+      - S3_BUCKET=vfr
+      - S3_REGION=us-east-1
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_PREFIX=vfr/
+      - RESULT_REDIRECT=1
     ports:
       - "8000:8000"
     depends_on:
@@ -93,11 +107,12 @@ services:
       retries: 30
     volumes:
       - app_storage:/app/storage
+    gpus: ${GPU_REQUEST:-all}
 
   migrate:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: ${DOCKERFILE_API:-Dockerfile.api.gpu}
     environment:
       - DATABASE_URL=postgresql+psycopg://vfr:vfr@postgres:5432/vfr
     depends_on:
@@ -132,13 +147,34 @@ services:
       mc anonymous set download local/$$S3_BUCKET || true && \
       echo 'MinIO bucket ready'"
 
-volumes:
-  pgdata:
-  minio_data:
-  app_storage:
   remote_worker:
     build:
       context: .
       dockerfile: Dockerfile.remote
     ports:
       - "9000:9000"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:
+  minio_data:
+  app_storage:

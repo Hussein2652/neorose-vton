@@ -518,6 +518,10 @@ def _startup():
                             os.environ.get("SDXL_CN_SEG", "diffusers/controlnet-seg-sdxl-1.0"),
                         ]
                     ids = [base, refiner, turbo, flux] + cn_ids
+                    # Also prefetch any hf_models listed in models.yaml
+                    for mid in (mcfg.get('hf_models') or []):
+                        if isinstance(mid, str) and mid:
+                            ids.append(mid)
                     for mid in ids:
                         try:
                             snapshot_download(repo_id=mid, local_files_only=False)

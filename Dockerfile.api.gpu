@@ -5,11 +5,13 @@ RUN apt-get update && apt-get install -y python3 python3-venv python3-pip && rm 
 
 WORKDIR /app
 COPY requirements.txt requirements-ml.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt && pip3 install --no-cache-dir -r requirements-ml.txt
+# Install CUDA-enabled PyTorch first, then remaining deps
+RUN pip3 install --no-cache-dir --index-url https://download.pytorch.org/whl/cu124 torch torchvision && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install --no-cache-dir -r requirements-ml.txt
 COPY . .
 RUN chmod +x docker/api-entrypoint.sh && mkdir -p storage
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["docker/api-entrypoint.sh"]
-
