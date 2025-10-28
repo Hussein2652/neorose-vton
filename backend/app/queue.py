@@ -47,8 +47,10 @@ class Jobs:
             # Persist status transition
             try:
                 from .db import update_job
+                from .cache import cache_set_job
 
                 update_job(job.id, status="running")
+                cache_set_job(job.id, status="running")
             except Exception:
                 pass
             try:
@@ -58,8 +60,10 @@ class Jobs:
                 job.status = "completed"
                 try:
                     from .db import update_job
+                    from .cache import cache_set_job
 
                     update_job(job.id, status="completed", result_path=job.result_path)
+                    cache_set_job(job.id, status="completed", result_path=job.result_path)
                 except Exception:
                     pass
             except Exception as e:  # noqa: BLE001
@@ -67,8 +71,10 @@ class Jobs:
                 job.status = "failed"
                 try:
                     from .db import update_job
+                    from .cache import cache_set_job
 
                     update_job(job.id, status="failed", error=job.error)
+                    cache_set_job(job.id, status="failed", error=job.error)
                 except Exception:
                     pass
             finally:

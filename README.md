@@ -10,6 +10,9 @@ What’s Included
 - In-process background job runner (no Redis required) to keep things simple.
 - Optional Celery/Redis integration for distributed background execution.
 - SQLite by default, with Postgres support via `DATABASE_URL`.
+- Alembic migrations for DB schema.
+- Redis-backed job status cache for fast polling.
+- Two UIs: a simple static demo and a React app scaffold.
 - Pipeline skeleton modules matching the PDF stages: person parsing, pose extraction, garment warping, geometry fitting, finisher, and post-processing.
 - Configs in YAML per the PDF (baseline hyperparameters included and easily overridden via env).
 - Simple Python SDK client and a local CLI/demo script.
@@ -56,6 +59,22 @@ Use Celery + Redis (Optional)
   - uvicorn backend.app.main:app --reload
   - Jobs will be enqueued to the Celery worker; status is synced via task id.
 
+Database Migrations (Alembic)
+- Ensure dependencies installed, then run:
+  - chmod +x scripts/db_upgrade.sh
+  - ./scripts/db_upgrade.sh
+  - Set `DATABASE_URL` to target Postgres before running if needed.
+
+Job Status Cache (Redis)
+- Optional: export `REDIS_URL=redis://localhost:6379/2` (default). Cache TTL via `CACHE_TTL`.
+
+React Frontend
+- A React app scaffold is in `frontend/react-app` (Vite + TS):
+  - cd frontend/react-app
+  - npm install
+  - npm run dev
+  - Opens on http://127.0.0.1:5173 (proxy to API is configured)
+
 4) Run Local Demo (no API)
    - Provide a user and garment image; outputs a composite result to storage:
      python scripts/run_local_demo.py \
@@ -94,6 +113,7 @@ Notes
  - DB: defaults to SQLite at `storage/vfr.sqlite3`. Override with `DATABASE_URL` to use Postgres.
  - Celery: set `USE_CELERY=1` and provide `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.
  - Finisher backend: set `FINISHER_BACKEND=local` (default) or `FINISHER_BACKEND=kling` to use the Kling stub. For real Kling integration, implement providers/kling_api.py HTTP call.
+  - Kling API: set `KLING_API_KEY`, `KLING_API_ENDPOINT`, and optional `KLING_TIMEOUT` to call a real endpoint. Falls back to local enhancement if not configured.
 
 Next Steps (Suggested)
 - Wire Redis+Celery and Postgres for robust job orchestration and persistence.

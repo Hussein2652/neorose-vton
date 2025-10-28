@@ -10,3 +10,5 @@ psycopg[binary]==3.2.3
 celery==5.4.0
 redis==5.0.8
 requests==2.32.3
+alembic==1.13.2
+tenacity==8.5.0

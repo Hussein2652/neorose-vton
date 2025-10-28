@@ -8,6 +8,7 @@ from .queue import Jobs
 from .storage import Storage
 from .pipeline_runner import run_tryon_job
 from .db import init_db, create_job, get_job, update_job
+from .cache import cache_get_job, cache_set_job
 
 USE_CELERY = os.environ.get("USE_CELERY", "0") == "1"
 if USE_CELERY:
@@ -42,6 +43,7 @@ async def create_tryon_job(
         job_id = str(uuid.uuid4())
         if USE_CELERY:
             async_result = run_tryon_task.delay(
+                job_id=job_id,
                 user_image_path=user_path,
                 garment_front_path=g_front_path,
                 garment_side_path=g_side_path,
@@ -54,6 +56,7 @@ async def create_tryon_job(
                 provider=os.environ.get("FINISHER_BACKEND", "local"),
                 task_id=async_result.id,
             )
+            cache_set_job(job_id, status="queued")
         else:
             create_job(
                 job_id,
@@ -69,6 +72,7 @@ async def create_tryon_job(
                 garment_front_path=g_front_path,
                 garment_side_path=g_side_path,
             )
+            cache_set_job(job_id, status="queued")
         return JobCreateResponse(job_id=job_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -76,6 +80,8 @@ async def create_tryon_job(
 
 @app.get("/v1/jobs/{job_id}", response_model=JobStatusResponse)
 def get_job_status(job_id: str):
+    # Try cache first
+    c = cache_get_job(job_id)
     db_job = get_job(job_id)
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -96,12 +102,10 @@ def get_job_status(job_id: str):
                 db_job = get_job(job_id) or db_job
         except Exception:
             pass
-    return JobStatusResponse(
-        job_id=job_id,
-        status=db_job.status,
-        error=db_job.error,
-        result_path=db_job.result_path,
-    )
+    status = c.get("status") if c else db_job.status
+    result_path = c.get("result_path") if c else db_job.result_path
+    error = c.get("error") if c else db_job.error
+    return JobStatusResponse(job_id=job_id, status=status, error=error, result_path=result_path)
 
 
 @app.get("/v1/jobs/{job_id}/result")
