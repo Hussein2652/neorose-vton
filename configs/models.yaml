@@ -12,7 +12,7 @@ artifacts:
     unpack: false
   - name: realesrgan
     version: x4plus
-    url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.3.0/RealESRGAN_x4plus.pth
+    url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth
     unpack: false
   - name: swinir
     version: x4
@@ -37,10 +37,14 @@ artifacts:
     url: https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl_lora.safetensors
     sha256: f24b4bb2dad6638a09c00f151cde84991baf374409385bcbab53c1871a30cb7b
     unpack: false
-  - name: instantid_antelopev2
+  - name: ip_adapter_faceid_plusv2_bin
+    version: sdxl
+    url: https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl.bin
+    unpack: false
+  - name: instantid_antelopev2_onnx
     version: v1
-    url: https://huggingface.co/MonsterMMORPG/tools/resolve/main/antelopev2.zip
-    unpack: true
+    url: https://huggingface.co/InstantX/InstantID/resolve/main/models/antelopev2.onnx
+    unpack: false
   - name: instantid_controlnet
     version: v1
     url: https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors
@@ -50,8 +54,8 @@ artifacts:
     url: https://huggingface.co/InstantX/InstantID/resolve/main/ip-adapter.bin
     unpack: false
   - name: rvm_mobilenetv3
-    version: v1
-    url: https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0/rvm_mobilenetv3.pth
+    version: v1.0.0
+    url: https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3.pth
     unpack: false
   - name: midas_dpt_large
     version: v3
@@ -59,7 +63,15 @@ artifacts:
     unpack: false
   - name: big_lama
     version: v1
-    url: https://huggingface.co/saic-mdal/Big-LaMA/resolve/main/big-lama.pt
+    url: https://huggingface.co/advimman/lama/resolve/main/big-lama.pt
+    unpack: false
+  - name: triposr
+    version: v1
+    url: https://huggingface.co/stabilityai/TripoSR/resolve/main/weights.ckpt
+    unpack: false
+  - name: clip_vit_l14
+    version: v1
+    url: https://huggingface.co/openai/clip-vit-large-patch14/resolve/main/pytorch_model.bin
     unpack: false
   - name: omnidata_normals
     version: v1
@@ -79,7 +91,7 @@ artifacts:
 #   unpack: true
   - name: schp_lip
     version: 20190826
-    url: https://huggingface.co/levindabhi/Self-Correction-Human-Parsing/resolve/main/exp-schp-201908261155-lip.pth
+    url: https://huggingface.co/levihsu/ced/resolve/main/exp-schp-201908261155-lip.pth
     unpack: false
   - name: schp_cihp
     version: 20190826
@@ -116,26 +128,5 @@ artifacts:
 #   unpack: false
 
 hf_models:
-  # SDXL base/refiner + turbo + flux
-  - stabilityai/stable-diffusion-xl-base-1.0
-  - stabilityai/stable-diffusion-xl-refiner-1.0
-  - stabilityai/sdxl-turbo
-  - black-forest-labs/FLUX.1-dev
-  # SDXL ControlNets (canny/openpose/depth/normal/seg)
-  - diffusers/controlnet-canny-sdxl-1.0
-  - diffusers/controlnet-openpose-sdxl-1.0
-  - diffusers/controlnet-depth-sdxl-1.0
-  - diffusers/controlnet-normal-sdxl-1.0
-  - diffusers/controlnet-seg-sdxl-1.0
-  # IP-Adapter FaceID models
-  - h94/IP-Adapter-FaceID
-  # ControlNet SD1.5 (for auxiliary checks/tools)
-  - lllyasviel/sd-controlnet-openpose
-  - lllyasviel/sd-controlnet-depth
-  - lllyasviel/control_v11p_sd15_normalbae
-  - lllyasviel/sd-controlnet-canny
-  # ControlNet Union SDXL
-  - xinsir/controlnet-union-sdxl-1.0
+  # Minimal HF repos required for annotators; finisher weights fetched via artifacts above
   - lllyasviel/Annotators
-  - patrickjohncyh/fashion-clip
-  - Marqo/marqo-fashionCLIP
