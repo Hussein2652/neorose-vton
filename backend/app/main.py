@@ -17,7 +17,7 @@ from prometheus_client import make_asgi_app as make_prom_app
 from .graphql_schema import graphql_app
 from .billing import router as billing_router
 from .validators import enforce_max_upload_size
-from .artifacts import ensure_artifact, ArtifactSpec
+from .artifacts import ensure_artifact, ArtifactSpec, ingest_manual_assets
 import yaml
 try:
     from dotenv import load_dotenv
@@ -496,6 +496,10 @@ def _startup():
                         set_artifact_local(spec.name, spec.version, local, size)
                     except Exception:
                         pass
+            # Ingest manual licensed assets (SMPL-X/PIXIE)
+            manual_dir = os.environ.get("MANUAL_MODELS_DIR", "manual_downloads")
+            if os.path.isdir(manual_dir):
+                ingest_manual_assets(manual_dir)
             # Also prefetch HF models if configured
             if os.environ.get("PREFETCH_HF_MODELS", "0") == "1":
                 try:

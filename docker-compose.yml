@@ -50,6 +50,9 @@ services:
       - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
+      - MANUAL_MODELS_DIR=/app/manual_downloads
+      - SMPLX_HOME=/app/storage/models/smplx
+      - PIXIE_HOME=/app/storage/models/pixie
       - S3_BUCKET=vfr
       - S3_REGION=us-east-1
       - S3_ENDPOINT_URL=http://minio:9000
@@ -91,6 +94,9 @@ services:
       - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
+      - MANUAL_MODELS_DIR=/app/manual_downloads
+      - SMPLX_HOME=/app/storage/models/smplx
+      - PIXIE_HOME=/app/storage/models/pixie
       - AUTH_REQUIRED=0
       - RATE_LIMIT_ENABLED=1
       - RL_LIMIT=60

@@ -193,3 +193,90 @@ def ensure_artifact(spec: ArtifactSpec) -> Tuple[str, bool]:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
             except Exception:
                 pass
+
+
+def _copytree(src: str, dst: str) -> None:
+    if os.path.isdir(src):
+        if os.path.exists(dst):
+            # Merge copy
+            for root, dirs, files in os.walk(src):
+                rel = os.path.relpath(root, src)
+                troot = os.path.join(dst, rel) if rel != "." else dst
+                os.makedirs(troot, exist_ok=True)
+                for f in files:
+                    shutil.copy2(os.path.join(root, f), os.path.join(troot, f))
+        else:
+            shutil.copytree(src, dst)
+
+
+def ingest_manual_assets(manual_dir: str) -> dict:
+    """
+    Ingest manually downloaded, licensed assets into the persistent models directory.
+    - Expects optional subdirectories under `manual_dir`, e.g., `smplx/`, `pixie/`.
+    - Recognizes common archive filenames and extracts them into target locations.
+    Returns a dict report of actions taken.
+    """
+    report = {"manual_dir": manual_dir, "actions": []}
+    if not manual_dir or not os.path.isdir(manual_dir):
+        return report
+    try:
+        # Resolve typical folder names
+        smplx_src = None
+        for name in ("smplx_downloads", "smplx"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                smplx_src = cand
+                break
+        pixie_src = None
+        for name in ("pixie_downloads", "pixie"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                pixie_src = cand
+                break
+
+        # SMPL-X assets
+        if smplx_src:
+            smplx_dst = os.path.join(MODELS_DIR, "smplx")
+            os.makedirs(smplx_dst, exist_ok=True)
+            # Copy core files
+            for fname in os.listdir(smplx_src):
+                srcp = os.path.join(smplx_src, fname)
+                if os.path.isfile(srcp):
+                    # Rename SMPLX_NEUTRAL_*.npz to SMPLX_NEUTRAL.npz (compat)
+                    if fname.startswith("SMPLX_NEUTRAL") and fname.endswith(".npz"):
+                        shutil.copy2(srcp, os.path.join(smplx_dst, fname))
+                        shutil.copy2(srcp, os.path.join(smplx_dst, "SMPLX_NEUTRAL.npz"))
+                        report["actions"].append({"copied": [srcp, os.path.join(smplx_dst, "SMPLX_NEUTRAL.npz")]})
+                    elif fname.endswith(".pkl"):
+                        shutil.copy2(srcp, os.path.join(smplx_dst, fname))
+                        report["actions"].append({"copied": [srcp, os.path.join(smplx_dst, fname)]})
+                    elif fname.lower().endswith(".zip"):
+                        # Extract known zips
+                        target = "vposer" if "vposer" in fname.lower() else ("uv" if "uv" in fname.lower() else None)
+                        with zipfile.ZipFile(srcp, "r") as zf:
+                            outdir = os.path.join(smplx_dst, target) if target else smplx_dst
+                            os.makedirs(outdir, exist_ok=True)
+                            zf.extractall(outdir)
+                            report["actions"].append({"unzipped": [srcp, outdir]})
+
+        # PIXIE assets
+        if pixie_src:
+            pixie_dst = os.path.join(MODELS_DIR, "pixie")
+            os.makedirs(pixie_dst, exist_ok=True)
+            for fname in os.listdir(pixie_src):
+                srcp = os.path.join(pixie_src, fname)
+                if os.path.isfile(srcp):
+                    if fname.lower().endswith(".tar"):
+                        with tarfile.open(srcp, "r:") as tf:
+                            tf.extractall(pixie_dst)
+                        report["actions"].append({"untarred": [srcp, pixie_dst]})
+                    elif fname.lower().endswith(".zip"):
+                        with zipfile.ZipFile(srcp, "r") as zf:
+                            zf.extractall(pixie_dst)
+                        report["actions"].append({"unzipped": [srcp, pixie_dst]})
+                    else:
+                        shutil.copy2(srcp, os.path.join(pixie_dst, fname))
+                        report["actions"].append({"copied": [srcp, os.path.join(pixie_dst, fname)]})
+    except Exception as e:  # pragma: no cover
+        report["error"] = str(e)
+    return report

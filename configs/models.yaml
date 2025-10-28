@@ -1,36 +1,27 @@
 # Define model artifacts to prefetch (download once) on startup if PREFETCH_MODELS=1
-# Each item: name, version, sha256, and either url or s3_uri. Optionally unpack: true.
+# Each item: name, version, sha256 (optional), and either url or s3_uri. Optionally unpack: true.
 
 artifacts:
-  - name: yolo_v8_pose
-    version: v8n
-    url: https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n-pose.pt
-    unpack: false
+  # --- Pose (best-of) ---
   - name: yolo_v8_pose
     version: v8x
     url: https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-pose.pt
     unpack: false
+
+  # --- Upscale / face restore ---
   - name: realesrgan
     version: x4plus
     url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth
-    unpack: false
-  - name: swinir
-    version: x4
-    # Provide your own URL/S3 for SwinIR x4 weights if you want this upscaler
-    # url: https://...
-    # s3_uri: s3://...
     unpack: false
   - name: codeformer
     version: v0.1.0
     url: https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth
     unpack: false
+
+  # --- IP-Adapter & FaceID (SDXL) ---
   - name: ip_adapter
     version: sdxl
     url: https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter_sdxl.bin
-    unpack: false
-  - name: ip_adapter_plus
-    version: sdxl_vit_h
-    url: https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus_sdxl_vit-h.bin
     unpack: false
   - name: ip_adapter_faceid_plusv2_lora
     version: sdxl
@@ -41,6 +32,8 @@ artifacts:
     version: sdxl
     url: https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl.bin
     unpack: false
+
+  # --- InstantID (optional but kept) ---
   - name: instantid_antelopev2_onnx
     version: v1
     url: https://huggingface.co/InstantX/InstantID/resolve/main/models/antelopev2.onnx
@@ -53,14 +46,20 @@ artifacts:
     version: v1
     url: https://huggingface.co/InstantX/InstantID/resolve/main/ip-adapter.bin
     unpack: false
+
+  # --- Matting ---
   - name: rvm_mobilenetv3
     version: v1.0.0
     url: https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3.pth
     unpack: false
-  - name: midas_dpt_large
-    version: v3
-    url: https://github.com/isl-org/MiDaS/releases/download/v3/dpt_large-midas-2f21e586.pt
+
+  # --- Depth (best-of) ---
+  - name: zoedepth_m12_nk
+    version: v1
+    url: https://huggingface.co/ckpt/ControlNet-v1-1/resolve/main/ZoeD_M12_NK.pt
     unpack: false
+
+  # --- Garment UV/inpaint + coarse mesh + fabric classifier ---
   - name: big_lama
     version: v1
     url: https://huggingface.co/advimman/lama/resolve/main/big-lama.pt
@@ -73,60 +72,31 @@ artifacts:
     version: v1
     url: https://huggingface.co/openai/clip-vit-large-patch14/resolve/main/pytorch_model.bin
     unpack: false
-  - name: omnidata_normals
-    version: v1
-    # Provide URL/S3 for Omnidata normals model (for high-quality normal control)
-    # url: https://...
-    # s3_uri: s3://...
-    unpack: false
-# - name: stable_viton
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/stable_viton_v1.tar.gz"
-#   unpack: true
-# - name: smplx
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/smplx_models.tar.gz"
-#   unpack: true
+
+  # --- Segmentation (pick one; we use LIP) ---
   - name: schp_lip
     version: 20190826
     url: https://huggingface.co/levihsu/ced/resolve/main/exp-schp-201908261155-lip.pth
     unpack: false
-  - name: schp_cihp
-    version: 20190826
-    url: https://huggingface.co/levindabhi/Self-Correction-Human-Parsing/resolve/main/exp-schp-201908261155-cihp.pth
+
+  # --- SDXL base/refiner (local-file loading) ---
+  - name: sdxl_base
+    version: 1.0
+    url: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors
     unpack: false
-  - name: openpose_caffe
-    version: body_25
-    url: https://huggingface.co/camenduru/openpose/resolve/f5bb0c0a16060ac8b373472a5456c76bd68eb202/pose_iter_440000.caffemodel
+  - name: sdxl_refiner
+    version: 1.0
+    url: https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors
     unpack: false
-# - name: ghum
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/ghum_models.tar.gz"
-#   unpack: true
-# - name: openpose_models
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/openpose_models.zip"
-#   unpack: true
-# - name: gp_vton
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/gp_vton_weights.tar.gz"
-#   unpack: true
-# - name: recloth_viton
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/recloth_viton_weights.tar.gz"
-#   unpack: true
-# - name: bgm_v2
-#   version: v1
-#   sha256: "<sha256>"
-#   s3_uri: "s3://my-bucket/path/to/background_matting_v2.pth"
-#   unpack: false
+
+  # --- (Optional) OpenPose Caffe (only if you enable it)
+  # - name: openpose_caffe
+  #   version: body_25
+  #   url: https://huggingface.co/camenduru/openpose/resolve/f5bb0c0a16060ac8b373472a5456c76bd68eb202/pose_iter_440000.caffemodel
+  #   unpack: false
 
 hf_models:
-  # Minimal HF repos required for annotators; finisher weights fetched via artifacts above
+  # Required for HED / NormalBae / Zoe / OpenPose annotators (control maps)
   - lllyasviel/Annotators
+  # ControlNet-Union SDXL needs a full local snapshot folder (configs + weights)
+  - xinsir/controlnet-union-sdxl-1.0
