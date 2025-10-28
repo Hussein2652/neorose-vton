@@ -60,15 +60,54 @@ class FileLock:
             pass
 
 
-def _download_http(url: str, dest_path: str) -> None:
+def _download_http(url: str, dest_path: str, max_retries: int = 6) -> None:
+    """Robust HTTP downloader with resume support and retries.
+    - Resumes using HTTP Range when server supports it.
+    - Uses exponential backoff on transient errors.
+    """
     import requests
+    import time as _time
+    from requests.exceptions import ChunkedEncodingError, ConnectionError
 
-    with requests.get(url, stream=True, timeout=300) as r:
-        r.raise_for_status()
-        with open(dest_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    attempt = 0
+    chunk_size = 4 * 1024 * 1024  # 4 MB
+    session = requests.Session()
+    headers_base = {"Accept-Encoding": "identity", "User-Agent": "neorose-prefetch/1.0"}
+
+    while True:
+        attempt += 1
+        try:
+            start_size = os.path.getsize(dest_path) if os.path.exists(dest_path) else 0
+            headers = dict(headers_base)
+            if start_size > 0:
+                headers["Range"] = f"bytes={start_size}-"
+            r = session.get(url, stream=True, timeout=(20, 600), headers=headers, allow_redirects=True)
+            # If server doesn't support Range and we had a partial file, restart from scratch
+            if r.status_code == 200 and start_size > 0:
+                r.close()
+                # restart from scratch
+                try:
+                    os.remove(dest_path)
+                except FileNotFoundError:
+                    pass
+                start_size = 0
+                r = session.get(url, stream=True, timeout=(20, 600), headers=headers_base, allow_redirects=True)
+            r.raise_for_status()
+
+            mode = "ab" if start_size > 0 else "wb"
+            with open(dest_path, mode) as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+            # Download completed
+            return
+        except (ChunkedEncodingError, ConnectionError, IOError) as e:
+            if attempt >= max_retries:
+                raise
+            # backoff (1,2,4,8,16,32)
+            _time.sleep(min(32, 2 ** (attempt - 1)))
+            continue
 
 
 def _download_s3(s3_uri: str, dest_path: str) -> None:
