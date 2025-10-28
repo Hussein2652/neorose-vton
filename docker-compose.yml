@@ -65,6 +65,7 @@ services:
     command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
     volumes:
       - app_storage:/app/storage
+      - ./manual_downloads:/app/manual_downloads:ro
     gpus: ${GPU_REQUEST:-all}
 
   api:
@@ -125,6 +126,7 @@ services:
       retries: 30
     volumes:
       - app_storage:/app/storage
+      - ./manual_downloads:/app/manual_downloads:ro
     gpus: ${GPU_REQUEST:-all}
 
   migrate:
