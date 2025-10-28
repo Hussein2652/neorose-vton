@@ -30,10 +30,10 @@ artifacts:
     unpack: false
 
   # --- InstantID (optional but kept) ---
-  - name: instantid_antelopev2_onnx
+  - name: instantid_antelopev2_bundle
     version: v1
-    url: https://huggingface.co/InstantX/InstantID/resolve/main/models/antelopev2.onnx
-    unpack: false
+    url: https://huggingface.co/MonsterMMORPG/tools/resolve/main/antelopev2.zip
+    unpack: true
   - name: instantid_controlnet
     version: v1
     url: https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors
