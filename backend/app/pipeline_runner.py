@@ -1,13 +1,16 @@
 from typing import Optional
+import os
 from pipeline.pipeline import VFRPipeline
 from backend.app.config import settings
 from .storage import Storage
+from .db import update_job
 
 
 def run_tryon_job(
     user_image_path: str,
     garment_front_path: str,
     garment_side_path: Optional[str] = None,
+    job_id: Optional[str] = None,
 ):
     pipe = VFRPipeline.from_settings(settings)
     result = pipe.run(
@@ -17,4 +20,15 @@ def run_tryon_job(
     )
     # Optionally publish to S3/CDN
     result_url = Storage.publish_result(result.output_path)
-    return {"result_path": result.output_path, "result_url": result_url}
+    # Estimate cost by backend
+    backend = os.environ.get("FINISHER_BACKEND", str(settings.get("finisher.backend", "local")))
+    cost_local = float(os.environ.get("COST_LOCAL", "0.0"))
+    cost_kling = float(os.environ.get("COST_KLING", "0.0"))
+    cost = cost_kling if backend == "kling" else cost_local
+    # Note: update_job called by queue/tasks too; this call only sets cost if present
+    try:
+        if job_id:
+            update_job(job_id, cost_estimate=cost)
+    except Exception:
+        pass
+    return {"result_path": result.output_path, "result_url": result_url, "cost_estimate": cost}

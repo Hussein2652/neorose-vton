@@ -14,6 +14,8 @@ from providers.local_stub import (
     LocalQA,
 )
 from providers.kling_api import KlingFinisher
+from .controls import build_controls
+from .vton_expert import apply_vton
 
 
 @dataclass
@@ -50,6 +52,7 @@ class VFRPipeline:
                 "denoise_delta": float(settings.get("qa_thresholds.retry.denoise_delta", -0.02)),
             },
             "escalate_on_fail": bool(settings.get("finisher.escalate_on_fail", False)),
+            "vton_enabled": bool(settings.get("vton.enabled", True)),
         }
         return cls(cfg)
 
@@ -80,15 +83,29 @@ class VFRPipeline:
 
         # Stage: Warping (soft render placeholder)
         warp_dir = os.path.join(work_root, "warp")
-        soft_render_path = self.warper.process(garment.garment_front_path, user_can.user_image_path, warp_dir)
-        draped = DrapedOutput(
-            soft_render_path=soft_render_path,
+        warped_garment_path = self.warper.process(
+            garment.garment_front_path,
+            user_can.user_image_path,
+            warp_dir,
+            keypoints_path=user_can.keypoints_path,
         )
+        # Optional VTON expert blend
+        if self.cfg.get("vton_enabled", True):
+            vton_dir = os.path.join(work_root, "vton")
+            vton_path = apply_vton(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
+            soft_input = vton_path
+        else:
+            soft_input = warped_garment_path
+        draped = DrapedOutput(soft_render_path=soft_input)
 
         # Stage: Geometry (stub)
         drape_dir = os.path.join(work_root, "drape")
         _marker = self.geometry.process(None, None, drape_dir)
         _ = _marker  # unused placeholder
+
+        # Stage: Controls for finisher
+        controls_dir = os.path.join(work_root, "controls")
+        controls = build_controls(user_can.user_image_path, user_can.mask_path, user_can.keypoints_path, controls_dir)
 
         # Stage: Finisher (img2img polish placeholder)
         attempts = 0
@@ -98,11 +115,18 @@ class VFRPipeline:
         last_scores = None
         while attempts <= max_retries:
             fin_dir = os.path.join(work_root, f"finisher_try_{attempts}")
-            polished_path = self.finisher.process(draped.soft_render_path, fin_dir, denoise=denoise)
+            polished_path = self.finisher.process(draped.soft_render_path, fin_dir, denoise=denoise, controls=controls)
             post_dir = os.path.join(work_root, f"post_try_{attempts}")
             final_path = self.post.process(polished_path, post_dir)
             # QA
-            scores = self.qa.evaluate(final_path, refs={"user": user_can.user_image_path, "garment": garment.garment_front_path})
+            scores = self.qa.evaluate(
+                final_path,
+                refs={
+                    "user": user_can.user_image_path,
+                    "garment": garment.garment_front_path,
+                    "work_root": work_root,
+                },
+            )
             last_scores = scores
             if scores.get("passed"):
                 break

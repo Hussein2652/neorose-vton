@@ -34,6 +34,9 @@ io_contracts:
     in: ["soft render:PNG", "control maps:PNG", "adapters:features"]
     out: ["final:PNG/JPEG"]
 
+vton:
+  enabled: true
+
 qa_thresholds:
   garment_fidelity_clip_min: 0.28
   garment_fidelity_lpips_max: 0.32

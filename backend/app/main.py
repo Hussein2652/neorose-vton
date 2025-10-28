@@ -11,6 +11,11 @@ from .db import init_db, create_job, get_job, update_job
 from .cache import cache_get_job, cache_set_job
 from .auth import require_auth, check_basic_auth
 from .ratelimit import rate_limit
+from .logging_config import setup_logging
+from .metrics import jobs_created, jobs_completed, jobs_failed, jobs_in_queue
+from prometheus_client import make_asgi_app as make_prom_app
+from .graphql_schema import graphql_app
+from .billing import router as billing_router
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -39,6 +44,12 @@ async def create_tryon_job(
     _rl=Depends(rate_limit),
 ):
     try:
+        user_id = None
+        try:
+            # _user may be None when auth is disabled
+            user_id = getattr(_user, 'uid', None)
+        except Exception:
+            user_id = None
         # Save uploads
         user_path = Storage.save_upload(user_image, prefix="user")
         g_front_path = Storage.save_upload(garment_front, prefix="garment_front")
@@ -64,6 +75,8 @@ async def create_tryon_job(
                 garment_side_path=g_side_path,
                 provider=os.environ.get("FINISHER_BACKEND", "local"),
                 task_id=async_result.id,
+                user_id=user_id,
+                plan=os.environ.get("DEFAULT_PLAN", "free"),
             )
             cache_set_job(job_id, status="queued")
         else:
@@ -73,15 +86,20 @@ async def create_tryon_job(
                 garment_front_path=g_front_path,
                 garment_side_path=g_side_path,
                 provider=os.environ.get("FINISHER_BACKEND", "local"),
+                user_id=user_id,
+                plan=os.environ.get("DEFAULT_PLAN", "free"),
             )
             Jobs.enqueue(
                 run_tryon_job,
-                job_id=job_id,
+                queue_job_id=job_id,
                 user_image_path=user_path,
                 garment_front_path=g_front_path,
                 garment_side_path=g_side_path,
+                job_id=job_id,
             )
             cache_set_job(job_id, status="queued")
+        jobs_created.inc()
+        jobs_in_queue.inc()
         return JobCreateResponse(job_id=job_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -137,9 +155,100 @@ def get_job_result(job_id: str, _rl: None = Depends(rate_limit)):
     return FileResponse(db_job.result_path, filename="vfr_result.jpg")
 
 
+# Admin endpoints
+def _require_admin(request) -> None:
+    key = os.environ.get("ADMIN_API_KEY")
+    if not key or request.headers.get("x-admin-key") != key:
+        raise HTTPException(status_code=401, detail="Admin key required")
+
+
+@app.get("/v1/admin/jobs")
+def admin_list_jobs(limit: int = 50, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import list_jobs as db_list_jobs
+
+    rows = db_list_jobs(limit)
+    return [
+        {
+            "id": j.id,
+            "status": j.status,
+            "error": j.error,
+            "provider": j.provider,
+            "user_id": j.user_id,
+            "plan": j.plan,
+            "quality": j.quality,
+            "cost_estimate": j.cost_estimate,
+            "result_url": j.result_url,
+            "created_at": str(j.created_at),
+        }
+        for j in rows
+    ]
+
+
+@app.get("/v1/admin/feature-flags")
+def admin_list_flags(request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import FeatureFlagORM, engine
+    from sqlalchemy.orm import Session
+
+    with Session(engine) as s:
+        rows = list(s.query(FeatureFlagORM).all())  # type: ignore[attr-defined]
+        return [{"key": r.key, "value": r.value, "description": r.description} for r in rows]
+
+
+@app.post("/v1/admin/feature-flags")
+def admin_set_flag(key: str, value: str, description: str | None = None, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import set_feature_flag
+
+    set_feature_flag(key, value, description)
+    return {"ok": True}
+
+
+@app.get("/v1/admin/models")
+def admin_list_models(request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import ModelArtifactORM, engine
+    from sqlalchemy.orm import Session
+
+    with Session(engine) as s:
+        rows = list(s.query(ModelArtifactORM).all())  # type: ignore[attr-defined]
+        return [
+            {"name": r.name, "version": r.version, "sha256": r.sha256, "s3_path": r.s3_path, "created_at": str(r.created_at)}
+            for r in rows
+        ]
+
+
+@app.post("/v1/admin/models")
+def admin_upsert_model(name: str, version: str, sha256: str, s3_path: str | None = None, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import ModelArtifactORM, engine
+    from sqlalchemy.orm import Session
+
+    with Session(engine) as s:
+        obj = s.get(ModelArtifactORM, name)
+        if not obj:
+            obj = ModelArtifactORM(name=name, version=version, sha256=sha256, s3_path=s3_path)
+        else:
+            obj.version = version
+            obj.sha256 = sha256
+            obj.s3_path = s3_path
+        s.add(obj)
+        s.commit()
+    return {"ok": True}
+
+
+@app.get("/v1/me")
+def me(_user=Depends(require_auth)):
+    if not _user:
+        return {"anon": True}
+    return {"uid": _user.uid, "email": getattr(_user, "email", None)}
+
+
 # Start the worker on app start
 @app.on_event("startup")
 def _startup():
+    setup_logging()
     Storage.ensure_dirs()
     init_db()
     Jobs.ensure_worker()
@@ -152,6 +261,26 @@ def _startup():
     )
     try:
         app.mount("/web", StaticFiles(directory="frontend/web", html=True), name="web")
+    except Exception:
+        pass
+    # Prometheus metrics endpoint
+    try:
+        app.mount("/metrics", make_prom_app())
+    except Exception:
+        pass
+    # GraphQL endpoint
+    try:
+        app.mount("/graphql", graphql_app)
+    except Exception:
+        pass
+    # Billing routes
+    app.include_router(billing_router, prefix="/v1")
+
+@app.on_event("shutdown")
+def _shutdown():
+    # best-effort: reset queue gauge
+    try:
+        jobs_in_queue.set(0)
     except Exception:
         pass
 

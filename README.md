@@ -16,6 +16,12 @@ What’s Included
 - Pipeline skeleton modules matching the PDF stages: person parsing, pose extraction, garment warping, geometry fitting, finisher, and post-processing.
 - Configs in YAML per the PDF (baseline hyperparameters included and easily overridden via env).
 - Simple Python SDK client and a local CLI/demo script.
+- GraphQL endpoint at `/graphql` (Query: job, health; Mutation: create_tryon_job_from_paths).
+- Prometheus metrics at `/metrics` (jobs created/completed/failed, queue size).
+- Basic billing/tiers scaffolding (plans/users/usage tables) and model registry/feature flags.
+ - Optional pose-aware garment placement (MediaPipe Pose if installed) and GrabCut segmentation (OpenCV).
+ - Control maps generation (edge, depth, normal, pose, seg) to mirror ControlNets inputs.
+ - VTON placeholder stage (seamless clone or alpha composite) before finisher.
 
 Quickstart
 1) Setup
@@ -92,6 +98,19 @@ React Frontend
   - npm install
   - npm run dev
   - Opens on http://127.0.0.1:5173 (proxy to API is configured)
+
+GraphQL
+- Visit http://127.0.0.1:8000/graphql for GraphiQL
+- Sample mutation:
+  mutation { createTryonJobFromPaths(userImagePath:"sample_data/user.jpg", garmentFrontPath:"sample_data/garment_front.jpg") }
+
+Prometheus Metrics
+- Scrape http://127.0.0.1:8000/metrics
+- Exposed metrics: vfr_jobs_created_total, vfr_jobs_completed_total, vfr_jobs_failed_total, vfr_jobs_in_queue
+
+SDKs
+- Python: `sdk/python/neorose_vfr_client.py`
+- Node: `sdk/node/neoroseVfrClient.js` (requires node-fetch and form-data)
 
 Environment Configuration
 - Copy `.env.example` to `.env` and adjust values for your setup.
@@ -186,7 +205,17 @@ Notes
  - DB: defaults to SQLite at `storage/vfr.sqlite3`. Override with `DATABASE_URL` to use Postgres.
  - Celery: set `USE_CELERY=1` and provide `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.
  - Finisher backend: set `FINISHER_BACKEND=local` (default) or `FINISHER_BACKEND=kling` to use the Kling stub. For real Kling integration, implement providers/kling_api.py HTTP call.
-  - Kling API: set `KLING_API_KEY`, `KLING_API_ENDPOINT`, and optional `KLING_TIMEOUT` to call a real endpoint. Falls back to local enhancement if not configured.
+ - Kling API: set `KLING_API_KEY`, `KLING_API_ENDPOINT`, and optional `KLING_TIMEOUT` to call a real endpoint. Falls back to local enhancement if not configured.
+ - Optional pose extraction: if `mediapipe` is installed, the system extracts pose landmarks for improved garment placement. Without it, center placement is used.
+ - Optional segmentation: uses OpenCV GrabCut when available (opencv-python); otherwise a full mask.
+ - Control maps: generated under `storage/results/work/controls/` to approximate ControlNet inputs.
+ - VTON stage: enabled by default (`vton.enabled: true` in configs); creates a blended soft render for the finisher.
+
+Admin & Billing
+- Admin list jobs: `GET /v1/admin/jobs` with header `x-admin-key: $ADMIN_API_KEY`
+- Feature flags: `GET/POST /v1/admin/feature-flags`
+- Model registry: `GET/POST /v1/admin/models`
+- Stripe webhook (stub): `POST /v1/billing/stripe/webhook` (set `STRIPE_WEBHOOK_SECRET` for signature verification)
 
 Next Steps (Suggested)
 - Wire Redis+Celery and Postgres for robust job orchestration and persistence.

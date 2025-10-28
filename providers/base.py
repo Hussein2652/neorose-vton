@@ -12,7 +12,7 @@ class PoseExtractor(Protocol):
 
 
 class GarmentWarper(Protocol):
-    def process(self, garment_front_path: str, user_image_path: str, out_dir: str) -> str: ...
+    def process(self, garment_front_path: str, user_image_path: str, out_dir: str, keypoints_path: Optional[str] = None) -> str: ...
 
 
 class GeometryFitter(Protocol):
@@ -20,7 +20,14 @@ class GeometryFitter(Protocol):
 
 
 class Finisher(Protocol):
-    def process(self, soft_render_path: str, out_dir: str, denoise: float = 0.18) -> str: ...
+    def process(
+        self,
+        soft_render_path: str,
+        out_dir: str,
+        denoise: float = 0.18,
+        controls: Optional[dict] = None,
+        adapters: Optional[dict] = None,
+    ) -> str: ...
 
 
 class PostProcessor(Protocol):
@@ -29,4 +36,3 @@ class PostProcessor(Protocol):
 
 class QA(Protocol):
     def evaluate(self, final_path: str, refs: dict) -> dict: ...
-

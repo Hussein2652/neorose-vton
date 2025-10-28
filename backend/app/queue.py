@@ -24,8 +24,8 @@ class Jobs:
 
     @classmethod
     def enqueue(cls, func: Callable[..., Any], **kwargs: Any) -> str:
-        # Allow caller to supply a stable job_id (e.g., to match DB row)
-        provided_id = kwargs.pop("job_id", None)
+        # Allow caller to supply a stable id separate from function kwargs
+        provided_id = kwargs.pop("queue_job_id", None)
         job_id = provided_id or str(uuid.uuid4())
         job = Job(id=job_id, func=func, kwargs=kwargs)
         cls._jobs[job_id] = job
@@ -62,9 +62,15 @@ class Jobs:
                 try:
                     from .db import update_job
                     from .cache import cache_set_job
+                    from .metrics import jobs_completed, jobs_in_queue
 
                     update_job(job.id, status="completed", result_path=job.result_path, result_url=job_result_url)
                     cache_set_job(job.id, status="completed", result_path=job.result_path, result_url=job_result_url)
+                    try:
+                        jobs_completed.inc()
+                        jobs_in_queue.dec()
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             except Exception as e:  # noqa: BLE001
@@ -73,9 +79,15 @@ class Jobs:
                 try:
                     from .db import update_job
                     from .cache import cache_set_job
+                    from .metrics import jobs_failed, jobs_in_queue
 
                     update_job(job.id, status="failed", error=job.error)
                     cache_set_job(job.id, status="failed", error=job.error)
+                    try:
+                        jobs_failed.inc()
+                        jobs_in_queue.dec()
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             finally:

@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Text,
     DateTime,
+    Float,
     select,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
@@ -33,6 +34,10 @@ class JobORM(Base):
     result_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     result_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    plan: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    quality: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    cost_estimate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow
@@ -57,6 +62,9 @@ def create_job(
     garment_side_path: Optional[str] = None,
     provider: Optional[str] = None,
     task_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    plan: Optional[str] = None,
+    quality: Optional[str] = None,
 ) -> None:
     with Session(engine) as s:
         s.add(
@@ -68,6 +76,9 @@ def create_job(
                 garment_side_path=garment_side_path,
                 provider=provider,
                 task_id=task_id,
+                user_id=user_id,
+                plan=plan,
+                quality=quality,
             )
         )
         s.commit()
@@ -81,6 +92,7 @@ def update_job(
     result_path: Optional[str] = None,
     result_url: Optional[str] = None,
     task_id: Optional[str] = None,
+    cost_estimate: Optional[float] = None,
 ) -> None:
     with Session(engine) as s:
         job = s.get(JobORM, job_id)
@@ -96,7 +108,89 @@ def update_job(
             job.result_url = result_url
         if task_id is not None:
             job.task_id = task_id
+        if cost_estimate is not None:
+            job.cost_estimate = cost_estimate
         s.add(job)
+        s.commit()
+
+
+class PlanORM(Base):
+    __tablename__ = "plans"
+    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    # simple attributes for demo: backend default and max resolution
+    default_backend: Mapped[str] = mapped_column(String(16), default="local")
+    max_res_long: Mapped[int] = mapped_column(
+        String(16), default="1344"
+    )  # keep as string for simplicity
+
+
+class UserORM(Base):
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    plan: Mapped[str] = mapped_column(String(32), default="free")
+
+
+class UsageORM(Base):
+    __tablename__ = "usage"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(128))
+    job_id: Mapped[str] = mapped_column(String(64))
+    units: Mapped[float] = mapped_column(Float, default=1.0)
+    cost: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class ModelArtifactORM(Base):
+    __tablename__ = "model_artifacts"
+    name: Mapped[str] = mapped_column(String(128), primary_key=True)
+    version: Mapped[str] = mapped_column(String(32))
+    sha256: Mapped[str] = mapped_column(String(64))
+    s3_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class FeatureFlagORM(Base):
+    __tablename__ = "feature_flags"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(256), default="")
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+def set_feature_flag(key: str, value: str, description: Optional[str] = None) -> None:
+    with Session(engine) as s:
+        flag = s.get(FeatureFlagORM, key)
+        if not flag:
+            flag = FeatureFlagORM(key=key, value=value, description=description)
+        else:
+            flag.value = value
+            if description is not None:
+                flag.description = description
+        s.add(flag)
+        s.commit()
+
+
+def get_feature_flag(key: str, default: Optional[str] = None) -> Optional[str]:
+    with Session(engine) as s:
+        flag = s.get(FeatureFlagORM, key)
+        return flag.value if flag else default
+
+
+def list_jobs(limit: int = 50) -> list[JobORM]:
+    with Session(engine) as s:
+        stmt = select(JobORM).order_by(JobORM.created_at.desc()).limit(limit)
+        rows = list(s.scalars(stmt))
+        for r in rows:
+            s.expunge(r)
+        return rows
+
+
+def record_usage(user_id: Optional[str], job_id: str, units: float, cost: float) -> None:
+    if not user_id:
+        return
+    import uuid
+    with Session(engine) as s:
+        s.add(UsageORM(id=str(uuid.uuid4())[:12], user_id=user_id, job_id=job_id, units=units, cost=cost))
         s.commit()
 
 
@@ -108,3 +202,14 @@ def get_job(job_id: str) -> Optional[JobORM]:
         # Detach for safe return
         s.expunge(job)
         return job
+
+
+def ensure_user(user_id: str, email: Optional[str] = None, default_plan: str = "free") -> UserORM:
+    with Session(engine) as s:
+        user = s.get(UserORM, user_id)
+        if not user:
+            user = UserORM(id=user_id, email=email, plan=default_plan)
+            s.add(user)
+            s.commit()
+        s.expunge(user)
+        return user

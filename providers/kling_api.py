@@ -73,7 +73,7 @@ class KlingFinisher:
             return base64.b64decode(data["image_base64"]), "image/png"
         raise KlingAPIError("No image in Kling API response")
 
-    def process(self, soft_render_path: str, out_dir: str, denoise: float = 0.18) -> str:
+    def process(self, soft_render_path: str, out_dir: str, denoise: float = 0.18, controls: Optional[dict] = None, adapters: Optional[dict] = None) -> str:
         # Params aligned loosely with the PDF config
         params = {
             "mode": "img2img",
