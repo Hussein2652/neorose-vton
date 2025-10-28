@@ -2,12 +2,12 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-ml.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements-ml.txt
 
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
 CMD ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
-
