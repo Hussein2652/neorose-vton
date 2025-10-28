@@ -39,3 +39,21 @@ class VFRClient:
         r.raise_for_status()
         return r.content
 
+    def wait_for_result(self, job_id: str, timeout_s: int = 120, interval_s: float = 1.0) -> dict:
+        import time
+        deadline = time.time() + timeout_s
+        last = None
+        while time.time() < deadline:
+            last = self.job_status(job_id)
+            if last.get("status") in ("completed", "failed"):
+                return last
+            time.sleep(interval_s)
+        return last or {"status": "timeout", "job_id": job_id}
+
+    def download_result_to(self, job_id: str, out_path: str) -> str:
+        data = self.download_result(job_id)
+        import os
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with open(out_path, "wb") as f:
+            f.write(data)
+        return out_path

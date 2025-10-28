@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Neorose VFR Demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; }
+      .row { margin-bottom: 12px; }
+      label { display: block; font-weight: 600; margin-bottom: 6px; }
+      input[type=file] { padding: 6px; }
+      button { padding: 8px 14px; cursor: pointer; }
+      #log { white-space: pre-wrap; background: #f7f7f7; padding: 10px; border-radius: 6px; }
+      img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Neorose Virtual Fitting Room (Demo)</h1>
+    <div class="row">
+      <label>User Image</label>
+      <input type="file" id="userImage" accept="image/*" />
+    </div>
+    <div class="row">
+      <label>Garment Front</label>
+      <input type="file" id="garmentFront" accept="image/*" />
+    </div>
+    <div class="row">
+      <label>Garment Side (optional)</label>
+      <input type="file" id="garmentSide" accept="image/*" />
+    </div>
+    <div class="row">
+      <button id="submitBtn">Submit Try-On</button>
+      <input type="text" id="baseUrl" value="http://127.0.0.1:8000" style="width: 280px; margin-left: 10px;" />
+    </div>
+    <div class="row">
+      <div id="log"></div>
+    </div>
+    <div class="row">
+      <img id="resultImg" alt="Result will appear here" />
+    </div>
+
+    <script>
+      const log = (...args) => {
+        const el = document.getElementById('log');
+        el.textContent += args.join(' ') + "\n";
+      };
+
+      async function submitTryOn() {
+        const baseUrl = document.getElementById('baseUrl').value.replace(/\/$/, '');
+        const userFile = document.getElementById('userImage').files[0];
+        const garmentFront = document.getElementById('garmentFront').files[0];
+        const garmentSide = document.getElementById('garmentSide').files[0];
+        if (!userFile || !garmentFront) {
+          alert('Please select user and garment front images.');
+          return;
+        }
+        const form = new FormData();
+        form.append('user_image', userFile);
+        form.append('garment_front', garmentFront);
+        if (garmentSide) form.append('garment_side', garmentSide);
+        log('Submitting job...');
+        const r = await fetch(`${baseUrl}/v1/jobs/tryon`, { method: 'POST', body: form });
+        if (!r.ok) {
+          log('Submit failed:', await r.text());
+          return;
+        }
+        const { job_id } = await r.json();
+        log('Job ID:', job_id);
+        // poll
+        let status = 'queued';
+        while (status !== 'completed' && status !== 'failed') {
+          await new Promise(res => setTimeout(res, 1000));
+          const s = await fetch(`${baseUrl}/v1/jobs/${job_id}`);
+          const js = await s.json();
+          status = js.status;
+          log(`Status: ${status}`);
+        }
+        if (status === 'completed') {
+          const img = document.getElementById('resultImg');
+          img.src = `${baseUrl}/v1/jobs/${job_id}/result`;
+          log('Done.');
+        } else {
+          log('Job failed.');
+        }
+      }
+
+      document.getElementById('submitBtn').addEventListener('click', submitTryOn);
+    </script>
+  </body>
+  </html>
+

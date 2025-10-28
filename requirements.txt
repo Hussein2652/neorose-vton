@@ -5,3 +5,8 @@ python-multipart==0.0.9
 PyYAML==6.0.2
 Pillow==10.4.0
 typing-extensions>=4.8.0
+SQLAlchemy==2.0.35
+psycopg[binary]==3.2.3
+celery==5.4.0
+redis==5.0.8
+requests==2.32.3

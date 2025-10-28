@@ -24,7 +24,9 @@ class Jobs:
 
     @classmethod
     def enqueue(cls, func: Callable[..., Any], **kwargs: Any) -> str:
-        job_id = str(uuid.uuid4())
+        # Allow caller to supply a stable job_id (e.g., to match DB row)
+        provided_id = kwargs.pop("job_id", None)
+        job_id = provided_id or str(uuid.uuid4())
         job = Job(id=job_id, func=func, kwargs=kwargs)
         cls._jobs[job_id] = job
         cls._queue.put(job)
@@ -42,14 +44,33 @@ class Jobs:
             except Empty:
                 continue
             job.status = "running"
+            # Persist status transition
+            try:
+                from .db import update_job
+
+                update_job(job.id, status="running")
+            except Exception:
+                pass
             try:
                 result = job.func(**job.kwargs)
                 if isinstance(result, dict) and "result_path" in result:
                     job.result_path = result["result_path"]
                 job.status = "completed"
+                try:
+                    from .db import update_job
+
+                    update_job(job.id, status="completed", result_path=job.result_path)
+                except Exception:
+                    pass
             except Exception as e:  # noqa: BLE001
                 job.error = str(e)
                 job.status = "failed"
+                try:
+                    from .db import update_job
+
+                    update_job(job.id, status="failed", error=job.error)
+                except Exception:
+                    pass
             finally:
                 self_ack = getattr(job.func, "ack", None)
                 if callable(self_ack):
@@ -71,4 +92,3 @@ class Jobs:
     def shutdown(cls) -> None:
         cls._stop = True
         time.sleep(0.1)
-

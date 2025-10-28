@@ -5,6 +5,8 @@ finisher:
   steps: 38
   cfg: 6.2
   res_long: 1344
+  backend: local  # local | kling
+  escalate_on_fail: false
   ctrl:
     pose: 0.55
     depth: 0.65
@@ -43,4 +45,3 @@ qa_thresholds:
     step_increase: 5
     garment_adapter_delta: 0.05
     denoise_delta: -0.02
-

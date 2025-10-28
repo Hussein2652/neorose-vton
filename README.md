@@ -8,6 +8,8 @@ Overview
 What’s Included
 - FastAPI backend with endpoints to submit try-on jobs, check status, and fetch results.
 - In-process background job runner (no Redis required) to keep things simple.
+- Optional Celery/Redis integration for distributed background execution.
+- SQLite by default, with Postgres support via `DATABASE_URL`.
 - Pipeline skeleton modules matching the PDF stages: person parsing, pose extraction, garment warping, geometry fitting, finisher, and post-processing.
 - Configs in YAML per the PDF (baseline hyperparameters included and easily overridden via env).
 - Simple Python SDK client and a local CLI/demo script.
@@ -25,6 +27,8 @@ Quickstart
      uvicorn backend.app.main:app --reload
    - Docs at:
      http://127.0.0.1:8000/docs
+   - Optional web UI (static):
+     http://127.0.0.1:8000/web
 
 3) Submit a Try-On Job (multipart form)
    - From docs UI or via curl:
@@ -39,6 +43,18 @@ Quickstart
 
    - When done, download result:
      curl -OJ http://127.0.0.1:8000/v1/jobs/<job_id>/result
+
+Use Celery + Redis (Optional)
+- Start infra via docker-compose (Redis + Postgres + Celery worker):
+  - docker compose up -d redis postgres
+  - export DATABASE_URL=postgresql+psycopg://vfr:vfr@localhost:5432/vfr
+  - docker compose build celery_worker && docker compose up -d celery_worker
+- Start API with Celery enabled:
+  - export USE_CELERY=1
+  - export CELERY_BROKER_URL=redis://localhost:6379/0
+  - export CELERY_RESULT_BACKEND=redis://localhost:6379/1
+  - uvicorn backend.app.main:app --reload
+  - Jobs will be enqueued to the Celery worker; status is synced via task id.
 
 4) Run Local Demo (no API)
    - Provide a user and garment image; outputs a composite result to storage:
@@ -75,9 +91,13 @@ Notes
 - Advanced features (SMPL-X, real segmentation/pose, ReclothVITON/StableVITON, SDXL/Flux, CodeFormer, Kling API integration) are stubbed. The code isolates these behind interfaces so they can be swapped with real implementations.
 - Storage uses the local filesystem under `storage/`. Swap with S3/MinIO later via `backend/app/storage.py`.
 - Configs live in `configs/pipeline.yaml` and are overridable by env vars.
+ - DB: defaults to SQLite at `storage/vfr.sqlite3`. Override with `DATABASE_URL` to use Postgres.
+ - Celery: set `USE_CELERY=1` and provide `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`.
+ - Finisher backend: set `FINISHER_BACKEND=local` (default) or `FINISHER_BACKEND=kling` to use the Kling stub. For real Kling integration, implement providers/kling_api.py HTTP call.
 
 Next Steps (Suggested)
 - Wire Redis+Celery and Postgres for robust job orchestration and persistence.
 - Replace stubs with real models (segmentation, pose, VTON, img2img, QA metrics).
 - Add authentication/authorization, rate limiting, and observability (Prometheus/Grafana).
 - Add front-end (React/Flutter) per PDF, using the provided API.
+ - Swap local storage for S3/MinIO and add CDN.
