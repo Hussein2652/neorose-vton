@@ -151,6 +151,9 @@ class ModelArtifactORM(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     s3_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    local_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    downloaded_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class FeatureFlagORM(Base):
@@ -195,6 +198,80 @@ def record_usage(user_id: Optional[str], job_id: str, units: float, cost: float)
     with Session(engine) as s:
         s.add(UsageORM(id=str(uuid.uuid4())[:12], user_id=user_id, job_id=job_id, units=units, cost=cost))
         s.commit()
+
+
+def list_artifacts() -> list[ModelArtifactORM]:
+    with Session(engine) as s:
+        rows = list(s.query(ModelArtifactORM).all())  # type: ignore[attr-defined]
+        for r in rows:
+            s.expunge(r)
+        return rows
+
+
+def set_artifact_local(name: str, version: str, local_path: str, size_bytes: int) -> None:
+    with Session(engine) as s:
+        obj = s.get(ModelArtifactORM, name)
+        if not obj:
+            # minimal record
+            obj = ModelArtifactORM(name=name, version=version, sha256="", s3_path=None)
+        obj.local_path = local_path
+        obj.size_bytes = size_bytes
+        obj.downloaded_at = dt.datetime.utcnow()
+        s.add(obj)
+        s.commit()
+
+
+def list_plans() -> list[PlanORM]:
+    with Session(engine) as s:
+        rows = list(s.query(PlanORM).all())  # type: ignore[attr-defined]
+        for r in rows:
+            s.expunge(r)
+        return rows
+
+
+def upsert_plan(name: str, default_backend: str | None = None, max_res_long: str | None = None, monthly_limit: int | None = None, per_image_cost: float | None = None) -> None:
+    with Session(engine) as s:
+        obj = s.get(PlanORM, name)
+        if not obj:
+            obj = PlanORM(name=name)
+        if default_backend is not None:
+            obj.default_backend = default_backend
+        if max_res_long is not None:
+            obj.max_res_long = max_res_long
+        if monthly_limit is not None:
+            obj.monthly_limit = monthly_limit
+        if per_image_cost is not None:
+            obj.per_image_cost = per_image_cost
+        s.add(obj)
+        s.commit()
+
+
+def set_user_plan(user_id: str, plan: str) -> None:
+    with Session(engine) as s:
+        u = s.get(UserORM, user_id)
+        if not u:
+            u = UserORM(id=user_id, plan=plan)
+        else:
+            u.plan = plan
+        s.add(u)
+        s.commit()
+
+
+def get_usage_summary(user_id: str) -> dict:
+    import datetime as dt
+    with Session(engine) as s:
+        now = dt.datetime.utcnow()
+        month_start = dt.datetime(now.year, now.month, 1)
+        q = s.query(UsageORM).filter(UsageORM.user_id == user_id)  # type: ignore[attr-defined]
+        q_month = s.query(UsageORM).filter(UsageORM.user_id == user_id, UsageORM.created_at >= month_start)  # type: ignore[attr-defined]
+        def agg(query):
+            units = 0.0; cost = 0.0
+            for row in query:
+                units += float(row.units); cost += float(row.cost)
+            return units, cost
+        total_units, total_cost = agg(q)
+        m_units, m_cost = agg(q_month)
+        return {"total_units": total_units, "total_cost": total_cost, "month_units": m_units, "month_cost": m_cost}
 
 
 def get_job(job_id: str) -> Optional[JobORM]:

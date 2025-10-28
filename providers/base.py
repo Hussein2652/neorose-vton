@@ -36,3 +36,7 @@ class PostProcessor(Protocol):
 
 class QA(Protocol):
     def evaluate(self, final_path: str, refs: dict) -> dict: ...
+
+
+class VTONExpert(Protocol):
+    def process(self, user_image_path: str, warped_garment_path: str, mask_path: Optional[str], out_dir: str) -> str: ...

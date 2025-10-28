@@ -16,6 +16,8 @@ from providers.local_stub import (
 from providers.kling_api import KlingFinisher
 from .controls import build_controls
 from .vton_expert import apply_vton
+from providers.vton_local import LocalVTON
+from providers.stable_vton_stub import StableVTON
 
 
 @dataclass
@@ -35,6 +37,8 @@ class VFRPipeline:
         self.finisher = KlingFinisher() if backend == "kling" else LocalFinisher()
         self.post = LocalPostProcessor()
         self.qa = LocalQA()
+        vton_provider = self.cfg.get("vton_provider", "local")
+        self.vton = StableVTON() if vton_provider == "stableviton" else LocalVTON()
 
     @classmethod
     def from_settings(cls, settings) -> "VFRPipeline":
@@ -107,7 +111,7 @@ class VFRPipeline:
         # Optional VTON expert blend
         if self.cfg.get("vton_enabled", True):
             vton_dir = os.path.join(work_root, "vton")
-            vton_path = apply_vton(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
+            vton_path = self.vton.process(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
             soft_input = vton_path
         else:
             soft_input = warped_garment_path

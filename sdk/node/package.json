@@ -1,0 +1,12 @@
+{
+  "name": "neorose-vfr-client",
+  "version": "0.1.0",
+  "description": "Node client for Neorose VFR API",
+  "main": "neoroseVfrClient.js",
+  "license": "MIT",
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
+

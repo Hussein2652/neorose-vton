@@ -36,6 +36,7 @@ io_contracts:
 
 vton:
   enabled: true
+  provider: local  # local | stableviton
 
 qa_thresholds:
   garment_fidelity_clip_min: 0.28

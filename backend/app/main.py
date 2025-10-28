@@ -16,6 +16,9 @@ from .metrics import jobs_created, jobs_completed, jobs_failed, jobs_in_queue
 from prometheus_client import make_asgi_app as make_prom_app
 from .graphql_schema import graphql_app
 from .billing import router as billing_router
+from .validators import enforce_max_upload_size
+from .artifacts import ensure_artifact, ArtifactSpec
+import yaml
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -42,6 +45,7 @@ async def create_tryon_job(
     garment_side: UploadFile | None = File(None),
     _user=Depends(require_auth),
     _rl=Depends(rate_limit),
+    _lim=Depends(enforce_max_upload_size),
 ):
     try:
         user_id = None
@@ -252,6 +256,91 @@ def admin_upsert_model(name: str, version: str, sha256: str, s3_path: str | None
     return {"ok": True}
 
 
+@app.get("/v1/admin/artifacts")
+def admin_list_artifacts(request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import list_artifacts
+    rows = list_artifacts()
+    def present(p):
+        try:
+            return bool(p and os.path.exists(p))
+        except Exception:
+            return False
+    return [
+        {
+            "name": r.name,
+            "version": r.version,
+            "sha256": r.sha256,
+            "s3_path": r.s3_path,
+            "local_path": r.local_path,
+            "present": present(r.local_path),
+            "size_bytes": r.size_bytes,
+            "downloaded_at": str(r.downloaded_at) if r.downloaded_at else None,
+        }
+        for r in rows
+    ]
+
+
+@app.post("/v1/admin/artifacts/ensure")
+def admin_ensure_artifact(name: str, version: str, sha256: str | None = None, url: str | None = None, s3_uri: str | None = None, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .artifacts import ensure_artifact, ArtifactSpec
+    from .db import set_artifact_local
+    local, _ = ensure_artifact(ArtifactSpec(name=name, version=version, sha256=sha256, url=url, s3_uri=s3_uri, unpack=True))
+    try:
+        size = 0
+        if os.path.isdir(local):
+            for root, _dirs, files in os.walk(local):
+                for fn in files:
+                    size += os.path.getsize(os.path.join(root, fn))
+        else:
+            size = os.path.getsize(local)
+        set_artifact_local(name, version, local, size)
+    except Exception:
+        pass
+    return {"ok": True, "local": local}
+
+
+@app.get("/v1/admin/plans")
+def admin_list_plans(request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import list_plans
+    rows = list_plans()
+    return [
+        {
+            "name": r.name,
+            "default_backend": r.default_backend,
+            "max_res_long": r.max_res_long,
+            "monthly_limit": r.monthly_limit,
+            "per_image_cost": r.per_image_cost,
+        }
+        for r in rows
+    ]
+
+
+@app.post("/v1/admin/plans")
+def admin_upsert_plan(name: str, default_backend: str | None = None, max_res_long: str | None = None, monthly_limit: int | None = None, per_image_cost: float | None = None, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import upsert_plan
+    upsert_plan(name, default_backend, max_res_long, monthly_limit, per_image_cost)
+    return {"ok": True}
+
+
+@app.post("/v1/admin/users/{user_id}/plan")
+def admin_set_user_plan(user_id: str, plan: str, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import set_user_plan
+    set_user_plan(user_id, plan)
+    return {"ok": True}
+
+
+@app.get("/v1/admin/usage")
+def admin_get_usage(user_id: str, request=Depends(lambda r: r)):
+    _require_admin(request)
+    from .db import get_usage_summary
+    return get_usage_summary(user_id)
+
+
 @app.get("/v1/me")
 def me(_user=Depends(require_auth)):
     if not _user:
@@ -266,9 +355,12 @@ def _startup():
     Storage.ensure_dirs()
     init_db()
     Jobs.ensure_worker()
+    # CORS from env
+    origins = os.environ.get("CORS_ORIGINS", "*")
+    origin_list = [o.strip() for o in origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origin_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -289,6 +381,28 @@ def _startup():
         pass
     # Billing routes
     app.include_router(billing_router, prefix="/v1")
+
+    # Prefetch models if configured
+    try:
+        if os.environ.get("PREFETCH_MODELS", "0") == "1":
+            cfg_path = os.environ.get("MODELS_CONFIG", "configs/models.yaml")
+            if os.path.exists(cfg_path):
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    mcfg = yaml.safe_load(f) or {}
+                for a in mcfg.get('artifacts', []) or []:
+                    spec = ArtifactSpec(
+                        name=a.get('name'),
+                        version=a.get('version'),
+                        sha256=a.get('sha256'),
+                        url=a.get('url'),
+                        s3_uri=a.get('s3_uri'),
+                        unpack=bool(a.get('unpack', False)),
+                    )
+                    ensure_artifact(spec)
+    except Exception as e:
+        # Log but don't fail startup
+        import logging
+        logging.getLogger(__name__).warning(f"Prefetch models failed: {e}")
 
 @app.on_event("shutdown")
 def _shutdown():

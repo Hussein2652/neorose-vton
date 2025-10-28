@@ -1,0 +1,10 @@
+# Define model artifacts to prefetch (download once) on startup if PREFETCH_MODELS=1
+# Each item: name, version, sha256, and either url or s3_uri. Optionally unpack: true.
+
+artifacts: []
+# - name: stable_viton
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/stable_viton_v1.tar.gz"
+#   unpack: true
+

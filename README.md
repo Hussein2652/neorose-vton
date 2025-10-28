@@ -76,6 +76,7 @@ Full Docker Setup (API + Celery + Redis + Postgres)
   - Static UI at http://127.0.0.1:8000/web
   - Run Alembic migrations automatically via api entrypoint.
   - Healthchecks are configured for Redis, Postgres, and API.
+  - Persistent storage: a named volume `app_storage` is mounted at `/app/storage` for the API and Celery worker so artifacts/results persist across container restarts.
 
 Migrations Service (recommended)
 - To run explicit migrations on Postgres before API starts, use the dedicated service:
@@ -228,3 +229,11 @@ Next Steps (Suggested)
 - Add authentication/authorization, rate limiting, and observability (Prometheus/Grafana).
 - Add front-end (React/Flutter) per PDF, using the provided API.
  - Swap local storage for S3/MinIO and add CDN.
+Model Artifacts (Download Once)
+- Configure artifacts in `configs/models.yaml` and set `PREFETCH_MODELS=1` to prefetch at API startup.
+- Artifacts download to `MODELS_DIR` (default `storage/models/`), with file locking to avoid duplicates and a `.complete` marker to skip re-downloads.
+- Supports `url:` or `s3_uri:` sources and optional `sha256:` verification, with optional `unpack: true` for archives.
+- Admin endpoints:
+  - List: `GET /v1/admin/artifacts`
+  - Ensure: `POST /v1/admin/artifacts/ensure?name=...&version=...&sha256=...&url=...` (or `s3_uri=...`)
+- StableVITON stub can use env vars to ensure weights once: `STABLEVITON_URL` or `STABLEVITON_S3_URI`, plus `STABLEVITON_SHA256` and `STABLEVITON_VERSION`.
