@@ -530,13 +530,41 @@ def _startup():
 @app.get("/v1/health/models")
 def health_models() -> dict:
     required = []
-    # Critical local paths for strictly-offline finisher
+    # Critical local paths for strictly-offline finisher & preprocessors
     base = os.environ.get("SDXL_BASE_PATH", "/app/storage/models/sdxl_base/1.0/sd_xl_base_1.0.safetensors")
     refiner = os.environ.get("SDXL_REFINER_PATH", "/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors")
     union = os.environ.get("CONTROLNET_UNION_SDXL_DIR", "/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0")
     annot = os.environ.get("ANNOTATOR_DIR", "/app/storage/models/snapshots/lllyasviel-Annotators")
-    for p, t in [(base, 'file'), (refiner, 'file'), (union, 'dir'), (annot, 'dir')]:
-        required.append({"path": p, "type": t, "exists": (os.path.isfile(p) if t == 'file' else os.path.isdir(p))})
+
+    # Perception models (pose, depth, matting, upscaler)
+    yolo = os.environ.get("YOLOV8_POSE_MODEL", "/app/storage/models/yolo_v8_pose/v8x/yolov8x-pose.pt")
+    zoe = os.path.join(os.environ.get("MODELS_DIR", "/app/storage/models"), "zoedepth_m12_nk", "v1", "ZoeD_M12_NK.pt")
+    rvm = os.path.join(os.environ.get("MODELS_DIR", "/app/storage/models"), "rvm_mobilenetv3", "v1.0.0", "rvm_mobilenetv3.pth")
+    esr = os.environ.get("REALESRGAN_WEIGHTS", "/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth")
+
+    # Licensed geometry models (manual ingestion)
+    smplx_home = os.environ.get("SMPLX_HOME", "/app/storage/models/smplx")
+    pixie_home = os.environ.get("PIXIE_HOME", "/app/storage/models/pixie")
+    smplx_npz = os.path.join(smplx_home, "SMPLX_NEUTRAL.npz")
+
+    checks: list[tuple[str, str]] = [
+        (base, 'file'),
+        (refiner, 'file'),
+        (union, 'dir'),
+        (annot, 'dir'),
+        (yolo, 'file'),
+        (zoe, 'file'),
+        (rvm, 'file'),
+        (esr, 'file'),
+        (smplx_home, 'dir'),
+        (smplx_npz, 'file'),
+        (pixie_home, 'dir'),
+    ]
+
+    for p, t in checks:
+        exists = os.path.isfile(p) if t == 'file' else os.path.isdir(p)
+        required.append({"path": p, "type": t, "exists": exists})
+
     ok = all(r["exists"] for r in required)
     return {"ok": ok, "items": required}
 

@@ -11,7 +11,7 @@ artifacts:
   # --- Upscale / face restore ---
   - name: realesrgan
     version: x4plus
-    url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.3.0/RealESRGAN_x4plus.pth
+    url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
     unpack: false
   - name: codeformer
     version: v0.1.0
