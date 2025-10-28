@@ -16,7 +16,8 @@ def control_edges(user_image_path: str, out_dir: str) -> str:
     # Prefer HED from controlnet-aux; fallback to OpenCV canny
     try:
         from controlnet_aux import HEDdetector  # type: ignore
-        hed = HEDdetector.from_pretrained('lllyasviel/Annotators')
+        annot_dir = os.environ.get('ANNOTATOR_DIR')
+        hed = HEDdetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = hed(im)
         return _save(out_im, os.path.join(out_dir, 'edge.png'))
@@ -37,7 +38,8 @@ def control_depth(user_image_path: str, out_dir: str) -> str:
     # Prefer ZoeDepth via controlnet-aux; fallback to MiDaS DPT Large
     try:
         from controlnet_aux import ZoeDetector  # type: ignore
-        zoe = ZoeDetector.from_pretrained('lllyasviel/Annotators')
+        annot_dir = os.environ.get('ANNOTATOR_DIR')
+        zoe = ZoeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = zoe(im)
         return _save(out_im, os.path.join(out_dir, 'depth.png'))
@@ -69,7 +71,8 @@ def control_normals(user_image_path: str, out_dir: str) -> str:
     # Prefer NormalBae from controlnet-aux; fallback to a smoothed RGB proxy
     try:
         from controlnet_aux import NormalBaeDetector  # type: ignore
-        nb = NormalBaeDetector.from_pretrained('lllyasviel/Annotators')
+        annot_dir = os.environ.get('ANNOTATOR_DIR')
+        nb = NormalBaeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = nb(im)
         return _save(out_im, os.path.join(out_dir, 'normal.png'))
@@ -81,7 +84,8 @@ def control_pose(user_image_path: str, keypoints_path: Optional[str], out_dir: s
     # Prefer OpenPose rendering via controlnet-aux; fallback to MediaPipe keypoints path render
     try:
         from controlnet_aux import OpenposeDetector  # type: ignore
-        op = OpenposeDetector.from_pretrained('lllyasviel/Annotators')
+        annot_dir = os.environ.get('ANNOTATOR_DIR')
+        op = OpenposeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = op(im)
         return _save(out_im, os.path.join(out_dir, 'pose.png'))

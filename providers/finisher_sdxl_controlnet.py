@@ -15,6 +15,7 @@ class SDXLControlNetFinisher:
     def __init__(self) -> None:
         # Model IDs (override via env)
         self.base_id = os.environ.get("SDXL_BASE_ID", "stabilityai/stable-diffusion-xl-base-1.0")
+        self.base_path = os.environ.get("SDXL_BASE_PATH")
         # SDXL ControlNet model IDs (canny/pose/depth/normal/seg)
         self.cn_ids: List[str] = []
         # Allow comma-separated list in env, else use useful defaults
@@ -31,38 +32,75 @@ class SDXLControlNetFinisher:
                 os.environ.get("SDXL_CN_SEG", "diffusers/controlnet-seg-sdxl-1.0"),
             ]
         self.refiner_id = os.environ.get("SDXL_REFINER_ID", "stabilityai/stable-diffusion-xl-refiner-1.0")
+        self.refiner_path = os.environ.get("SDXL_REFINER_PATH")
+        self.cn_union_dir = os.environ.get("CONTROLNET_UNION_SDXL_DIR")
         self._pipe = None
         self._refiner = None
         self._ready = False
         try:
             import torch  # type: ignore
             from diffusers import (
-                AutoencoderKL,
                 ControlNetModel,
                 StableDiffusionXLControlNetImg2ImgPipeline,
                 StableDiffusionXLImg2ImgPipeline,
-                DDIMScheduler,
             )  # type: ignore
-            # Load multiple controlnets
-            cns = []
-            for mid in self.cn_ids:
-                try:
-                    cns.append(ControlNetModel.from_pretrained(mid, torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32))
-                except Exception:
-                    pass
-            if not cns:
-                # If none loaded, fallback to base SDXL img2img pipeline
-                self._pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.base_id)
+
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
+            # Load base pipeline from single safetensors file if provided, else from_pretrained
+            if self.base_path and os.path.exists(self.base_path):
+                base_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(self.base_path, torch_dtype=dtype)
             else:
-                self._pipe = StableDiffusionXLControlNetImg2ImgPipeline.from_pretrained(
-                    self.base_id, controlnet=cns
+                base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE")))
+
+            # Load ControlNet: prefer offline union snapshot dir; else try configured list; else none
+            controlnet = None
+            if self.cn_union_dir and os.path.isdir(self.cn_union_dir):
+                try:
+                    controlnet = ControlNetModel.from_pretrained(self.cn_union_dir, torch_dtype=dtype, local_files_only=True)
+                except Exception:
+                    controlnet = None
+            if controlnet is None and self.cn_ids:
+                cns = []
+                for mid in self.cn_ids:
+                    try:
+                        cns.append(ControlNetModel.from_pretrained(mid, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))))
+                    except Exception:
+                        pass
+                if cns:
+                    controlnet = cns if len(cns) > 1 else cns[0]
+
+            # Build final pipeline
+            if controlnet is not None:
+                self._pipe = StableDiffusionXLControlNetImg2ImgPipeline(
+                    vae=base_pipe.vae,
+                    text_encoder=base_pipe.text_encoder,
+                    text_encoder_2=base_pipe.text_encoder_2,
+                    tokenizer=base_pipe.tokenizer,
+                    tokenizer_2=base_pipe.tokenizer_2,
+                    unet=base_pipe.unet,
+                    scheduler=base_pipe.scheduler,
+                    image_encoder=getattr(base_pipe, "image_encoder", None),
+                    controlnet=controlnet,
+                    feature_extractor=getattr(base_pipe, "feature_extractor", None),
                 )
+            else:
+                self._pipe = base_pipe
+
             if torch.cuda.is_available():
-                self._pipe = self._pipe.to("cuda")
+                self._pipe = self._pipe.to(device)
+
+            # Load refiner from single safetensors if provided
             try:
-                self._refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.refiner_id)
-                if torch.cuda.is_available():
-                    self._refiner = self._refiner.to("cuda")
+                if self.refiner_path and os.path.exists(self.refiner_path):
+                    self._refiner = StableDiffusionXLImg2ImgPipeline.from_single_file(self.refiner_path, torch_dtype=dtype)
+                    if torch.cuda.is_available():
+                        self._refiner = self._refiner.to(device)
+                else:
+                    self._refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.refiner_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE")))
+                    if torch.cuda.is_available():
+                        self._refiner = self._refiner.to(device)
             except Exception:
                 self._refiner = None
             self._ready = True
@@ -137,4 +175,3 @@ class SDXLControlNetFinisher:
             out = os.path.join(out_dir, "cnx_fallback.png")
             image.save(out)
             return out
-

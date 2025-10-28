@@ -501,30 +501,18 @@ def _startup():
                 try:
                     from huggingface_hub import snapshot_download  # type: ignore
                     # SDXL base/refiner + common controlnets + SDXL turbo + Flux
-                    base = os.environ.get("SDXL_BASE_ID", "stabilityai/stable-diffusion-xl-base-1.0")
-                    refiner = os.environ.get("SDXL_REFINER_ID", "stabilityai/stable-diffusion-xl-refiner-1.0")
-                    turbo = os.environ.get("SDXL_MODEL_ID", "stabilityai/sdxl-turbo")
-                    flux = os.environ.get("FLUX_MODEL_ID", "black-forest-labs/FLUX.1-dev")
-                    cn_ids = []
-                    cn_env = os.environ.get("SDXL_CN_IDS")
-                    if cn_env:
-                        cn_ids = [s.strip() for s in cn_env.split(',') if s.strip()]
-                    else:
-                        cn_ids = [
-                            os.environ.get("SDXL_CN_CANNY", "diffusers/controlnet-canny-sdxl-1.0"),
-                            os.environ.get("SDXL_CN_POSE", "diffusers/controlnet-openpose-sdxl-1.0"),
-                            os.environ.get("SDXL_CN_DEPTH", "diffusers/controlnet-depth-sdxl-1.0"),
-                            os.environ.get("SDXL_CN_NORMAL", "diffusers/controlnet-normal-sdxl-1.0"),
-                            os.environ.get("SDXL_CN_SEG", "diffusers/controlnet-seg-sdxl-1.0"),
-                        ]
-                    ids = [base, refiner, turbo, flux] + cn_ids
-                    # Also prefetch any hf_models listed in models.yaml
+                    ids = []
                     for mid in (mcfg.get('hf_models') or []):
                         if isinstance(mid, str) and mid:
                             ids.append(mid)
+                    import re
+                    def san(s: str) -> str:
+                        return re.sub(r'[^a-zA-Z0-9_.-]+', '-', s)
                     for mid in ids:
                         try:
-                            snapshot_download(repo_id=mid, local_files_only=False)
+                            local_dir = os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', san(mid))
+                            os.makedirs(local_dir, exist_ok=True)
+                            snapshot_download(repo_id=mid, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
                         except Exception:
                             pass
                 except Exception:
@@ -533,6 +521,20 @@ def _startup():
         # Log but don't fail startup
         import logging
         logging.getLogger(__name__).warning(f"Prefetch models failed: {e}")
+
+
+@app.get("/v1/health/models")
+def health_models() -> dict:
+    required = []
+    # Critical local paths for strictly-offline finisher
+    base = os.environ.get("SDXL_BASE_PATH", "/app/storage/models/sdxl_base/1.0/sd_xl_base_1.0.safetensors")
+    refiner = os.environ.get("SDXL_REFINER_PATH", "/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors")
+    union = os.environ.get("CONTROLNET_UNION_SDXL_DIR", "/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0")
+    annot = os.environ.get("ANNOTATOR_DIR", "/app/storage/models/snapshots/lllyasviel-Annotators")
+    for p, t in [(base, 'file'), (refiner, 'file'), (union, 'dir'), (annot, 'dir')]:
+        required.append({"path": p, "type": t, "exists": (os.path.isfile(p) if t == 'file' else os.path.isdir(p))})
+    ok = all(r["exists"] for r in required)
+    return {"ok": ok, "items": required}
 
 @app.on_event("shutdown")
 def _shutdown():

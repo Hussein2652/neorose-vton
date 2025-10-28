@@ -44,6 +44,12 @@ services:
       - PREFETCH_HF_MODELS=1
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8n/yolov8n-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
+      - SDXL_BASE_PATH=/app/storage/models/sdxl_base/1.0/sd_xl_base_1.0.safetensors
+      - SDXL_REFINER_PATH=/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors
+      - CONTROLNET_UNION_SDXL_DIR=/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0
+      - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - S3_BUCKET=vfr
       - S3_REGION=us-east-1
       - S3_ENDPOINT_URL=http://minio:9000
@@ -79,6 +85,12 @@ services:
       - MODELS_CONFIG=/app/configs/models.yaml
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8n/yolov8n-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
+      - SDXL_BASE_PATH=/app/storage/models/sdxl_base/1.0/sd_xl_base_1.0.safetensors
+      - SDXL_REFINER_PATH=/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors
+      - CONTROLNET_UNION_SDXL_DIR=/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0
+      - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - AUTH_REQUIRED=0
       - RATE_LIMIT_ENABLED=1
       - RL_LIMIT=60
