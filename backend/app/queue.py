@@ -64,7 +64,7 @@ class Jobs:
                     from .cache import cache_set_job
 
                     update_job(job.id, status="completed", result_path=job.result_path, result_url=job_result_url)
-                    cache_set_job(job.id, status="completed", result_path=job.result_path)
+                    cache_set_job(job.id, status="completed", result_path=job.result_path, result_url=job_result_url)
                 except Exception:
                     pass
             except Exception as e:  # noqa: BLE001

@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .models import JobCreateResponse, JobStatusResponse
@@ -9,8 +9,13 @@ from .storage import Storage
 from .pipeline_runner import run_tryon_job
 from .db import init_db, create_job, get_job, update_job
 from .cache import cache_get_job, cache_set_job
-from .auth import require_auth
+from .auth import require_auth, check_basic_auth
 from .ratelimit import rate_limit
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 USE_CELERY = os.environ.get("USE_CELERY", "0") == "1"
 if USE_CELERY:
@@ -149,3 +154,16 @@ def _startup():
         app.mount("/web", StaticFiles(directory="frontend/web", html=True), name="web")
     except Exception:
         pass
+
+
+@app.middleware("http")
+async def _protect_web(request, call_next):
+    if os.environ.get("PROTECT_WEB", "0") == "1" and request.url.path.startswith("/web"):
+        try:
+            # Allow Basic auth or the regular API auth
+            basic = check_basic_auth(request)
+            if not basic:
+                await require_auth(request)
+        except HTTPException as e:
+            return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+    return await call_next(request)

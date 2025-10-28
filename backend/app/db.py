@@ -79,6 +79,7 @@ def update_job(
     status: Optional[str] = None,
     error: Optional[str] = None,
     result_path: Optional[str] = None,
+    result_url: Optional[str] = None,
     task_id: Optional[str] = None,
 ) -> None:
     with Session(engine) as s:
@@ -91,6 +92,8 @@ def update_job(
             job.error = error
         if result_path is not None:
             job.result_path = result_path
+        if result_url is not None:
+            job.result_url = result_url
         if task_id is not None:
             job.task_id = task_id
         s.add(job)

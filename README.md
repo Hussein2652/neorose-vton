@@ -24,6 +24,8 @@ Quickstart
      python -m venv .venv
      . .venv/bin/activate
      pip install -r requirements.txt
+   - Seed placeholder images (optional):
+     make seed
 
 2) Run the API
    - Start the server:
@@ -32,6 +34,8 @@ Quickstart
      http://127.0.0.1:8000/docs
    - Optional web UI (static):
      http://127.0.0.1:8000/web
+   - Or run via Makefile:
+     make api
 
 3) Submit a Try-On Job (multipart form)
    - From docs UI or via curl:
@@ -65,6 +69,13 @@ Full Docker Setup (API + Celery + Redis + Postgres)
   - API available at http://127.0.0.1:8000
   - Static UI at http://127.0.0.1:8000/web
   - Run Alembic migrations automatically via api entrypoint.
+  - Healthchecks are configured for Redis, Postgres, and API.
+
+Migrations Service (recommended)
+- To run explicit migrations on Postgres before API starts, use the dedicated service:
+  - docker compose up -d --build migrate
+  - Then bring up API:
+    - docker compose up -d --build api
 
 Database Migrations (Alembic)
 - Ensure dependencies installed, then run:
@@ -82,6 +93,38 @@ React Frontend
   - npm run dev
   - Opens on http://127.0.0.1:5173 (proxy to API is configured)
 
+Environment Configuration
+- Copy `.env.example` to `.env` and adjust values for your setup.
+- When running locally (without Docker), we auto-load `.env` via python-dotenv.
+- Docker Compose also uses `.env` for variable substitution.
+
+S3 Profile for Compose
+- Use the MinIO-backed S3 preset by layering the override file:
+  - docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d --build minio minio_setup
+  - docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d --build api celery_worker
+  - This sets STORAGE_BACKEND=s3 and points to the MinIO service.
+
+Makefile Shortcuts
+- `make install` – create venv and install deps
+- `make api` – run Uvicorn API locally
+- `make demo` – run local pipeline demo with sample images
+- `make seed` – generate sample images in `sample_data/`
+- `make migrate` – run Alembic migrations (uses `DATABASE_URL`)
+- `make compose-up` – bring up Redis, Postgres, Celery worker, API
+- `make compose-up-s3` – additionally bring up MinIO and configure S3 backend
+- `make compose-down` – stop and remove containers/volumes
+
+Local MinIO Service
+- docker compose up -d minio minio_setup
+- Access console at http://127.0.0.1:9001 (minioadmin/minioadmin)
+- Use with API by setting:
+  - export STORAGE_BACKEND=s3
+  - export S3_BUCKET=vfr
+  - export S3_REGION=us-east-1
+  - export S3_ENDPOINT_URL=http://127.0.0.1:9000
+  - export S3_ACCESS_KEY_ID=minioadmin
+  - export S3_SECRET_ACCESS_KEY=minioadmin
+
 Authentication (Optional)
 - Enable auth enforcement: `export AUTH_REQUIRED=1`
 - Firebase: `export FIREBASE_ENABLED=1` and ensure default credentials are set via `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -90,6 +133,11 @@ Authentication (Optional)
 Rate Limiting (Optional)
 - Enable: `export RATE_LIMIT_ENABLED=1`
 - Configure window/limit: `RL_WINDOW` (seconds), `RL_LIMIT` (requests/window). Uses Redis.
+ - Per-route limits: set `RL_LIMITS_JSON`, e.g.
+   RL_LIMITS_JSON='{"POST:/v1/jobs/tryon": {"limit": 20, "window": 60}, "GET:/v1/jobs/*": {"limit": 200, "window": 60}}'
+
+Protect Web UI
+- Require auth for `/web` routes: `export PROTECT_WEB=1` (uses the same auth mechanism configured for the API).
 
 S3/MinIO Storage + CDN (Optional)
 - Keep local files for processing, but publish results to S3/CDN:

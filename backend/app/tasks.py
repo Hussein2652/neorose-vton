@@ -21,7 +21,7 @@ def run_tryon_task(job_id: str, user_image_path: str, garment_front_path: str, g
         )
         try:
             update_job(job_id, status="completed", result_path=result.get("result_path"), result_url=result.get("result_url"))
-            cache_set_job(job_id, status="completed", result_path=result.get("result_path"))
+            cache_set_job(job_id, status="completed", result_path=result.get("result_path"), result_url=result.get("result_url"))
         except Exception:
             pass
         return result

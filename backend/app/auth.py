@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Optional
+import base64
 
 from fastapi import Depends, HTTPException, Request
 
@@ -66,3 +67,22 @@ async def require_auth(request: Request) -> Optional[AuthUser]:
     # If auth required but no method configured
     raise HTTPException(status_code=401, detail="Authentication required")
 
+
+def check_basic_auth(request: Request) -> Optional[AuthUser]:
+    """Optional Basic auth using BASIC_AUTH_USER/BASIC_AUTH_PASS envs."""
+    user = os.environ.get("BASIC_AUTH_USER")
+    pwd = os.environ.get("BASIC_AUTH_PASS")
+    if not user or not pwd:
+        return None
+    authz = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not authz or not authz.lower().startswith("basic "):
+        return None
+    try:
+        token = authz.split(" ", 1)[1]
+        raw = base64.b64decode(token).decode("utf-8")
+        u, p = raw.split(":", 1)
+        if u == user and p == pwd:
+            return AuthUser(uid=f"basic:{u}")
+    except Exception:
+        return None
+    return None
