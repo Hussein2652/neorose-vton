@@ -19,10 +19,6 @@ artifacts:
     unpack: false
 
   # --- IP-Adapter & FaceID (SDXL) ---
-  - name: ip_adapter
-    version: sdxl
-    url: https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter_sdxl.bin
-    unpack: false
   - name: ip_adapter_faceid_plusv2_lora
     version: sdxl
     url: https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl_lora.safetensors
@@ -100,3 +96,6 @@ hf_models:
   - lllyasviel/Annotators
   # ControlNet-Union SDXL needs a full local snapshot folder (configs + weights)
   - xinsir/controlnet-union-sdxl-1.0
+  # Snapshot IP-Adapter repos to avoid fragile direct-file links
+  - h94/IP-Adapter
+  - h94/IP-Adapter-FaceID
