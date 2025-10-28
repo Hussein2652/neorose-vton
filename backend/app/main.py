@@ -3,7 +3,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .models import JobCreateResponse, JobStatusResponse
+from .models import JobCreateResponse, JobStatusResponse, JobCreateFromUrlsRequest
 from .queue import Jobs
 from .storage import Storage
 from .pipeline_runner import run_tryon_job
@@ -121,6 +121,89 @@ async def create_tryon_job(
         return JobCreateResponse(job_id=job_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/jobs/tryon-from-urls", response_model=JobCreateResponse)
+async def create_tryon_job_from_urls(body: JobCreateFromUrlsRequest, _user=Depends(require_auth), _rl=Depends(rate_limit)):
+    try:
+        user_id = None
+        try:
+            user_id = getattr(_user, 'uid', None)
+        except Exception:
+            user_id = None
+        # Fetch URLs to local storage
+        user_path = Storage.save_from_url(body.user_image_url, prefix="user")
+        g_front_path = Storage.save_from_url(body.garment_front_url, prefix="garment_front")
+        g_side_path = Storage.save_from_url(body.garment_side_url, prefix="garment_side") if body.garment_side_url else None
+
+        import uuid
+        job_id = str(uuid.uuid4())
+        # Optional plan quota enforcement
+        try:
+            if user_id:
+                from .db import ensure_user, get_plan, get_month_usage_units
+                u = ensure_user(user_id)
+                p = get_plan(u.plan) if u else None
+                if p and p.monthly_limit is not None:
+                    used = get_month_usage_units(user_id)
+                    if used >= p.monthly_limit:
+                        raise HTTPException(status_code=402, detail="Quota exceeded; upgrade plan")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+        if USE_CELERY:
+            async_result = run_tryon_task.delay(
+                job_id=job_id,
+                user_image_path=user_path,
+                garment_front_path=g_front_path,
+                garment_side_path=g_side_path,
+            )
+            create_job(
+                job_id,
+                user_image_path=user_path,
+                garment_front_path=g_front_path,
+                garment_side_path=g_side_path,
+                provider=os.environ.get("FINISHER_BACKEND", "local"),
+                task_id=async_result.id,
+                user_id=user_id,
+                plan=os.environ.get("DEFAULT_PLAN", "free"),
+            )
+        else:
+            create_job(
+                job_id,
+                user_image_path=user_path,
+                garment_front_path=g_front_path,
+                garment_side_path=g_side_path,
+                provider=os.environ.get("FINISHER_BACKEND", "local"),
+                user_id=user_id,
+                plan=os.environ.get("DEFAULT_PLAN", "free"),
+            )
+            Jobs.enqueue(
+                run_tryon_job,
+                queue_job_id=job_id,
+                user_image_path=user_path,
+                garment_front_path=g_front_path,
+                garment_side_path=g_side_path,
+                job_id=job_id,
+            )
+        jobs_created.inc(); jobs_in_queue.inc(); cache_set_job(job_id, status="queued")
+        return JobCreateResponse(job_id=job_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/config")
+def get_config():
+    from .config import settings as s
+    import yaml
+    cfg_path = os.environ.get("VFR_CONFIG", "configs/pipeline.yaml")
+    raw = {}
+    if os.path.exists(cfg_path):
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            raw = yaml.safe_load(f) or {}
+    return {"config": raw}
 
 
 @app.get("/v1/jobs/{job_id}", response_model=JobStatusResponse)

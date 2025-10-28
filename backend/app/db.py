@@ -221,6 +221,35 @@ def set_artifact_local(name: str, version: str, local_path: str, size_bytes: int
         s.commit()
 
 
+class AssetCacheORM(Base):
+    __tablename__ = "asset_cache"
+    hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    type: Mapped[str] = mapped_column(String(16))  # 'user' | 'garment'
+    path: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+def get_asset_cache(hash_: str) -> Optional[AssetCacheORM]:
+    with Session(engine) as s:
+        obj = s.get(AssetCacheORM, hash_)
+        if not obj:
+            return None
+        s.expunge(obj)
+        return obj
+
+
+def set_asset_cache(hash_: str, type_: str, path: str) -> None:
+    with Session(engine) as s:
+        obj = s.get(AssetCacheORM, hash_)
+        if not obj:
+            obj = AssetCacheORM(hash=hash_, type=type_, path=path)
+        else:
+            obj.type = type_
+            obj.path = path
+        s.add(obj)
+        s.commit()
+
+
 def list_plans() -> list[PlanORM]:
     with Session(engine) as s:
         rows = list(s.query(PlanORM).all())  # type: ignore[attr-defined]

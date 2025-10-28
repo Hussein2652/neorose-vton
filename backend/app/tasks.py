@@ -3,6 +3,7 @@ from __future__ import annotations
 from .celery_app import celery_app
 from .pipeline_runner import run_tryon_job
 from .db import update_job, get_job, record_usage
+from .metrics import jobs_completed, jobs_failed, jobs_in_queue
 from .cache import cache_set_job
 
 
@@ -27,6 +28,10 @@ def run_tryon_task(job_id: str, user_image_path: str, garment_front_path: str, g
             job = get_job(job_id)
             if job and job.user_id:
                 record_usage(job.user_id, job_id, units=1.0, cost=float(result.get("cost_estimate") or 0.0))
+            try:
+                jobs_completed.inc(); jobs_in_queue.dec()
+            except Exception:
+                pass
         except Exception:
             pass
         return result
@@ -34,6 +39,10 @@ def run_tryon_task(job_id: str, user_image_path: str, garment_front_path: str, g
         try:
             update_job(job_id, status="failed", error=str(e))
             cache_set_job(job_id, status="failed", error=str(e))
+            try:
+                jobs_failed.inc(); jobs_in_queue.dec()
+            except Exception:
+                pass
         except Exception:
             pass
         raise

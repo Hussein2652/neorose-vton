@@ -3,6 +3,8 @@ import shutil
 import time
 from typing import Optional
 from fastapi import UploadFile
+import hashlib
+import requests
 
 try:
     import boto3  # type: ignore
@@ -16,6 +18,7 @@ STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")  # local | s3
 STORAGE_ROOT = os.environ.get("VFR_STORAGE", "storage")
 UPLOADS_DIR = os.path.join(STORAGE_ROOT, "uploads")
 RESULTS_DIR = os.path.join(STORAGE_ROOT, "results")
+CACHE_DIR = os.path.join(STORAGE_ROOT, "cache")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 S3_REGION = os.environ.get("S3_REGION")
@@ -31,6 +34,7 @@ class Storage:
     def ensure_dirs() -> None:
         os.makedirs(UPLOADS_DIR, exist_ok=True)
         os.makedirs(RESULTS_DIR, exist_ok=True)
+        os.makedirs(CACHE_DIR, exist_ok=True)
 
     @staticmethod
     def save_upload(upload: UploadFile, prefix: Optional[str] = None) -> str:
@@ -50,6 +54,23 @@ class Storage:
         path = os.path.join(RESULTS_DIR, filename)
         with open(path, "wb") as f:
             f.write(data)
+        return path
+
+    @staticmethod
+    def save_from_url(url: str, prefix: str | None = None) -> str:
+        Storage.ensure_dirs()
+        r = requests.get(url, stream=True, timeout=60)
+        r.raise_for_status()
+        # derive a safe name from url and hash
+        h = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
+        name = url.split("/")[-1] or "download.bin"
+        base = f"{prefix}_{h}_" if prefix else ""
+        safe_name = name.replace("/", "_").replace("\\", "_")
+        path = os.path.join(UPLOADS_DIR, base + safe_name)
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 64):
+                if chunk:
+                    f.write(chunk)
         return path
 
     @staticmethod

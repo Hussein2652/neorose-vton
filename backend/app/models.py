@@ -11,3 +11,9 @@ class JobStatusResponse(BaseModel):
     error: str | None = None
     result_path: str | None = None
     result_url: str | None = None
+
+
+class JobCreateFromUrlsRequest(BaseModel):
+    user_image_url: str
+    garment_front_url: str
+    garment_side_url: str | None = None

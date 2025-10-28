@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from backend.app.storage import RESULTS_DIR
+from backend.app.storage import CACHE_DIR
+from backend.app.assets import user_cache_dir, garment_cache_dir
+from backend.app.db import get_asset_cache, set_asset_cache
 from .io_types import UserCanonical, GarmentAssets, DrapedOutput
 from providers.local_stub import (
     LocalPersonParser,
@@ -18,6 +21,7 @@ from .controls import build_controls
 from .vton_expert import apply_vton
 from providers.vton_local import LocalVTON
 from providers.stable_vton_stub import StableVTON
+from providers.remote import RemoteFinisher, RemoteVTON, RemoteError
 
 
 @dataclass
@@ -34,11 +38,27 @@ class VFRPipeline:
         self.warper = LocalGarmentWarper()
         self.geometry = LocalGeometryFitter()
         backend = self.cfg.get("finisher_backend", "local")
-        self.finisher = KlingFinisher() if backend == "kling" else LocalFinisher()
+        if backend == "kling":
+            self.finisher = KlingFinisher()
+        elif backend == "remote":
+            try:
+                self.finisher = RemoteFinisher()
+            except Exception:
+                self.finisher = LocalFinisher()
+        else:
+            self.finisher = LocalFinisher()
         self.post = LocalPostProcessor()
         self.qa = LocalQA()
         vton_provider = self.cfg.get("vton_provider", "local")
-        self.vton = StableVTON() if vton_provider == "stableviton" else LocalVTON()
+        if vton_provider == "stableviton":
+            self.vton = StableVTON()
+        elif vton_provider == "remote":
+            try:
+                self.vton = RemoteVTON()
+            except Exception:
+                self.vton = LocalVTON()
+        else:
+            self.vton = LocalVTON()
 
     @classmethod
     def from_settings(cls, settings, overrides: Optional[dict] = None) -> "VFRPipeline":
@@ -90,9 +110,15 @@ class VFRPipeline:
         os.makedirs(work_root, exist_ok=True)
 
         # Stage: Person Canonicalization (stub)
-        person_dir = os.path.join(work_root, "person")
-        mask_path = self.person.process(user_image_path, person_dir)
-        keypoints_path = self.pose.process(user_image_path, person_dir)
+        # Cacheable person canonicalization
+        person_cache_dir, user_hash = user_cache_dir(user_image_path)
+        person_dir = person_cache_dir
+        mask_path = os.path.join(person_dir, "user_mask.png")
+        keypoints_path = os.path.join(person_dir, "keypoints.json")
+        if not os.path.exists(mask_path):
+            mask_path = self.person.process(user_image_path, person_dir)
+        if not os.path.exists(keypoints_path):
+            keypoints_path = self.pose.process(user_image_path, person_dir)
         user_can = UserCanonical(
             user_image_path=user_image_path,
             mask_path=mask_path,
@@ -100,6 +126,7 @@ class VFRPipeline:
         )
 
         # Stage: Garment Assetization (stub)
+        garment_cache, garment_hash = garment_cache_dir(garment_front_path)
         garment = GarmentAssets(
             garment_front_path=garment_front_path,
             garment_side_path=garment_side_path,

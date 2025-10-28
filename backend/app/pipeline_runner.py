@@ -32,11 +32,22 @@ def run_tryon_job(
     )
     # Optionally publish to S3/CDN
     result_url = Storage.publish_result(result.output_path)
-    # Estimate cost by backend
+    # Estimate cost from plan if available; fallback to backend pricing env
     backend = os.environ.get("FINISHER_BACKEND", str(settings.get("finisher.backend", "local")))
+    plan_cost = None
+    try:
+        if job_id:
+            j = get_job(job_id)
+            if j and j.plan:
+                p = get_plan(j.plan)
+                if p and p.per_image_cost is not None:
+                    plan_cost = float(p.per_image_cost)
+    except Exception:
+        plan_cost = None
     cost_local = float(os.environ.get("COST_LOCAL", "0.0"))
     cost_kling = float(os.environ.get("COST_KLING", "0.0"))
-    cost = cost_kling if backend == "kling" else cost_local
+    backend_cost = cost_kling if backend == "kling" else cost_local
+    cost = plan_cost if plan_cost is not None else backend_cost
     # Note: update_job called by queue/tasks too; this call only sets cost if present
     try:
         if job_id:

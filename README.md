@@ -57,6 +57,16 @@ Quickstart
    - When done, download result:
      curl -OJ http://127.0.0.1:8000/v1/jobs/<job_id>/result
 
+Alternative JSON Endpoint (URLs)
+- Submit images by URL instead of uploading files:
+  curl -X POST http://127.0.0.1:8000/v1/jobs/tryon-from-urls \
+    -H 'Content-Type: application/json' \
+    -d '{"user_image_url":"https://.../user.jpg","garment_front_url":"https://.../garment.jpg"}'
+
+Inspect Config
+- Fetch the current YAML config used by the pipeline:
+  curl http://127.0.0.1:8000/v1/config
+
 Use Celery + Redis (Optional)
 - Start infra via docker-compose (Redis + Postgres + Celery worker):
   - docker compose up -d redis postgres
@@ -212,6 +222,7 @@ Notes
  - Control maps: generated under `storage/results/work/controls/` to approximate ControlNet inputs.
  - VTON stage: enabled by default (`vton.enabled: true` in configs); creates a blended soft render for the finisher.
  - Optional ML QA extras: install via `pip install -r requirements-ml.txt` to enable LPIPS and CLIP-like similarity; otherwise lightweight QA is used.
+ - Caching: person canonicalization and keypoints are cached under `storage/cache/users/<sha256>/` keyed by image hash; garment asset cache directories are reserved under `storage/cache/garments/<sha256>/`.
 
 Plans & Quotas
 - Plans table supports `monthly_limit` and `per_image_cost` (see Alembic 0004).
