@@ -237,3 +237,8 @@ Model Artifacts (Download Once)
   - List: `GET /v1/admin/artifacts`
   - Ensure: `POST /v1/admin/artifacts/ensure?name=...&version=...&sha256=...&url=...` (or `s3_uri=...`)
 - StableVITON stub can use env vars to ensure weights once: `STABLEVITON_URL` or `STABLEVITON_S3_URI`, plus `STABLEVITON_SHA256` and `STABLEVITON_VERSION`.
+Monitoring (Optional)
+- Start Prometheus + Grafana overlay:
+  - docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build prometheus grafana
+- Prometheus: http://127.0.0.1:9090 (scrapes API /metrics)
+- Grafana: http://127.0.0.1:3000 (admin/admin by default)

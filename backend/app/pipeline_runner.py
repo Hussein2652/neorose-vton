@@ -3,6 +3,7 @@ import os
 from pipeline.pipeline import VFRPipeline
 from backend.app.config import settings
 from .storage import Storage
+from .db import get_job, get_plan
 from .db import update_job
 
 
@@ -12,7 +13,18 @@ def run_tryon_job(
     garment_side_path: Optional[str] = None,
     job_id: Optional[str] = None,
 ):
-    pipe = VFRPipeline.from_settings(settings)
+    # Determine pipeline overrides from job/plan if available
+    overrides = {}
+    try:
+        if job_id:
+            j = get_job(job_id)
+            if j and j.plan:
+                p = get_plan(j.plan)
+                if p and p.default_backend:
+                    overrides["finisher_backend"] = p.default_backend
+    except Exception:
+        pass
+    pipe = VFRPipeline.from_settings(settings, overrides=overrides)
     result = pipe.run(
         user_image_path=user_image_path,
         garment_front_path=garment_front_path,

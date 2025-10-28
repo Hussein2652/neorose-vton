@@ -39,3 +39,5 @@ compose-down:
 react-dev:
 	cd frontend/react-app && npm install && npm run dev
 
+compose-up-monitoring:
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build prometheus grafana

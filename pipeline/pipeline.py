@@ -41,7 +41,7 @@ class VFRPipeline:
         self.vton = StableVTON() if vton_provider == "stableviton" else LocalVTON()
 
     @classmethod
-    def from_settings(cls, settings) -> "VFRPipeline":
+    def from_settings(cls, settings, overrides: Optional[dict] = None) -> "VFRPipeline":
         # Settings is the backend.app.config.settings instance
         cfg = {
             "img2img_denoise": float(settings.get("finisher.denoise", 0.18)),
@@ -57,7 +57,12 @@ class VFRPipeline:
             },
             "escalate_on_fail": bool(settings.get("finisher.escalate_on_fail", False)),
             "vton_enabled": bool(settings.get("vton.enabled", True)),
+            "vton_provider": str(settings.get("vton.provider", "local")),
         }
+        if overrides:
+            for k, v in overrides.items():
+                if v is not None:
+                    cfg[k] = v
         # Feature flag overrides (best-effort)
         try:
             from backend.app.db import get_feature_flag  # type: ignore

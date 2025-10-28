@@ -398,7 +398,21 @@ def _startup():
                         s3_uri=a.get('s3_uri'),
                         unpack=bool(a.get('unpack', False)),
                     )
-                    ensure_artifact(spec)
+                    local, _ = ensure_artifact(spec)
+                    # update registry info
+                    try:
+                        from .db import set_artifact_local
+                        import os
+                        size = 0
+                        if os.path.isdir(local):
+                            for root, _dirs, files in os.walk(local):
+                                for fn in files:
+                                    size += os.path.getsize(os.path.join(root, fn))
+                        else:
+                            size = os.path.getsize(local)
+                        set_artifact_local(spec.name, spec.version, local, size)
+                    except Exception:
+                        pass
     except Exception as e:
         # Log but don't fail startup
         import logging
