@@ -1,0 +1,46 @@
+# Baseline hyperparameters and I/O contracts derived from the requirements PDF.
+
+finisher:
+  denoise: 0.20  # IMG2IMG_DENOISE
+  steps: 38
+  cfg: 6.2
+  res_long: 1344
+  ctrl:
+    pose: 0.55
+    depth: 0.65
+    normal: 0.45
+    seg: 0.75
+    edge: 0.35
+  adapters:
+    garment: 1.00
+    faceid: 0.85
+  refiner_denoise: 0.14
+  tilepass_denoise: 0.12
+  tilepass_steps: 16
+
+io_contracts:
+  user_canonicalization:
+    in: ["RGB image(s) >=1024px"]
+    out: ["smplx_mesh:OBJ/NPZ", "uv_texture:PNG", "masks:PNG", "keypoints:JSON"]
+  garment_assetization:
+    in: ["front photo", "side photo?", "fabric tag"]
+    out: ["mesh:OBJ", "uv:PNG", "texture:PNG"]
+  draping:
+    in: ["body mesh", "garment mesh", "pose"]
+    out: ["draped mesh", "collision map:NPZ"]
+  finisher:
+    in: ["soft render:PNG", "control maps:PNG", "adapters:features"]
+    out: ["final:PNG/JPEG"]
+
+qa_thresholds:
+  garment_fidelity_clip_min: 0.28
+  garment_fidelity_lpips_max: 0.32
+  aesthetics_min: 0.58
+  identity_min: 0.75
+  iou_garment_skin_min: 0.90
+  retry:
+    max_retries: 1
+    step_increase: 5
+    garment_adapter_delta: 0.05
+    denoise_delta: -0.02
+

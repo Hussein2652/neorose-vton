@@ -1,0 +1,83 @@
+Neorose VFR (Virtual Fitting Room)
+
+Overview
+- Implements the project skeleton described in “Virtual Fitting Room Requirements.pdf”.
+- Provides a FastAPI backend, an end-to-end pipeline skeleton with clear I/O contracts, local storage, baseline configs, and a simple CLI/demo.
+- Heavy ML components are stubbed with lightweight placeholders so the flow runs locally without large model downloads.
+
+What’s Included
+- FastAPI backend with endpoints to submit try-on jobs, check status, and fetch results.
+- In-process background job runner (no Redis required) to keep things simple.
+- Pipeline skeleton modules matching the PDF stages: person parsing, pose extraction, garment warping, geometry fitting, finisher, and post-processing.
+- Configs in YAML per the PDF (baseline hyperparameters included and easily overridden via env).
+- Simple Python SDK client and a local CLI/demo script.
+
+Quickstart
+1) Setup
+   - Python 3.10+
+   - Create a venv and install dependencies:
+     python -m venv .venv
+     . .venv/bin/activate
+     pip install -r requirements.txt
+
+2) Run the API
+   - Start the server:
+     uvicorn backend.app.main:app --reload
+   - Docs at:
+     http://127.0.0.1:8000/docs
+
+3) Submit a Try-On Job (multipart form)
+   - From docs UI or via curl:
+     curl -X POST \
+       -F "user_image=@sample_data/user.jpg" \
+       -F "garment_front=@sample_data/garment_front.jpg" \
+       -F "garment_side=@sample_data/garment_side.jpg" \
+       http://127.0.0.1:8000/v1/jobs/tryon
+
+   - Response contains a job_id. Check status:
+     curl http://127.0.0.1:8000/v1/jobs/<job_id>
+
+   - When done, download result:
+     curl -OJ http://127.0.0.1:8000/v1/jobs/<job_id>/result
+
+4) Run Local Demo (no API)
+   - Provide a user and garment image; outputs a composite result to storage:
+     python scripts/run_local_demo.py \
+       --user sample_data/user.jpg \
+       --garment sample_data/garment_front.jpg \
+       --out storage/demo_result.jpg
+
+Project Layout
+- backend/
+  - app/main.py              FastAPI app and routes
+  - app/models.py            Pydantic request/response models
+  - app/config.py            Settings loader (env + YAML)
+  - app/queue.py             In-process job queue (worker thread)
+  - app/storage.py           Local file storage helpers
+  - app/pipeline_runner.py   Bridges API jobs to pipeline
+- pipeline/
+  - io_types.py              Shared I/O contracts for stages
+  - pipeline.py              Orchestrates all stages
+  - person_parsing.py        Stub segmentation/masks
+  - pose_extraction.py       Stub pose/keypoints
+  - garment_warping.py       Stub garment alignment/warp
+  - geometry_fitting.py      Stub draping placeholder
+  - finisher.py              Stub photoreal finisher placeholder
+  - post_processing.py       Stub post-process filters
+- configs/
+  - pipeline.yaml            Baseline hyperparameters from PDF
+- sdk/python/neorose_vfr_client.py  Minimal Python client SDK
+- scripts/run_local_demo.py         CLI to run pipeline locally
+- requirements.txt           Minimal runtime deps
+- sample_data/               Placeholder images directory (add your own)
+
+Notes
+- Advanced features (SMPL-X, real segmentation/pose, ReclothVITON/StableVITON, SDXL/Flux, CodeFormer, Kling API integration) are stubbed. The code isolates these behind interfaces so they can be swapped with real implementations.
+- Storage uses the local filesystem under `storage/`. Swap with S3/MinIO later via `backend/app/storage.py`.
+- Configs live in `configs/pipeline.yaml` and are overridable by env vars.
+
+Next Steps (Suggested)
+- Wire Redis+Celery and Postgres for robust job orchestration and persistence.
+- Replace stubs with real models (segmentation, pose, VTON, img2img, QA metrics).
+- Add authentication/authorization, rate limiting, and observability (Prometheus/Grafana).
+- Add front-end (React/Flutter) per PDF, using the provided API.
