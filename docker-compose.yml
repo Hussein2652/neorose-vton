@@ -38,6 +38,12 @@ services:
       - VFR_CONFIG=/app/configs/pipeline.yaml
       - MODELS_DIR=/app/storage/models
       - LOCKS_DIR=/app/storage/locks
+      - HF_HOME=/app/storage/models/hf
+      - TORCH_HOME=/app/storage/models/torch
+      - PREFETCH_MODELS=1
+      - PREFETCH_HF_MODELS=1
+      - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8n/yolov8n-pose.pt
+      - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
     depends_on:
       - redis
       - postgres
@@ -59,8 +65,13 @@ services:
       - STORAGE_BACKEND=local
       - MODELS_DIR=/app/storage/models
       - LOCKS_DIR=/app/storage/locks
-      - PREFETCH_MODELS=0
+      - HF_HOME=/app/storage/models/hf
+      - TORCH_HOME=/app/storage/models/torch
+      - PREFETCH_MODELS=1
+      - PREFETCH_HF_MODELS=1
       - MODELS_CONFIG=/app/configs/models.yaml
+      - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8n/yolov8n-pose.pt
+      - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
       - AUTH_REQUIRED=0
       - RATE_LIMIT_ENABLED=1
       - RL_LIMIT=60

@@ -1,10 +1,88 @@
 # Define model artifacts to prefetch (download once) on startup if PREFETCH_MODELS=1
 # Each item: name, version, sha256, and either url or s3_uri. Optionally unpack: true.
 
-artifacts: []
+artifacts:
+  - name: yolo_v8_pose
+    version: v8n
+    url: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n-pose.pt
+    unpack: false
+  - name: realesrgan
+    version: x4plus
+    url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+    unpack: false
+  - name: swinir
+    version: x4
+    # Provide your own URL/S3 for SwinIR x4 weights if you want this upscaler
+    # url: https://...
+    # s3_uri: s3://...
+    unpack: false
+  - name: codeformer
+    version: v0.1.0
+    url: https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth
+    unpack: false
+  - name: ip_adapter
+    version: sdxl
+    url: https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter_sdxl.bin
+    unpack: false
+  - name: ip_adapter_plus
+    version: sdxl_vit_h
+    url: https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus_sdxl_vit-h.bin
+    unpack: false
+  - name: instantid_antelopev2
+    version: v1
+    url: https://huggingface.co/InstantX/InstantID/resolve/main/models/antelopev2.zip
+    unpack: true
+  - name: instantid_controlnet
+    version: v1
+    # Provide the ControlNet weights path for InstantID (SDXL) if using InstantID
+    # url: https://huggingface.co/InstantX/InstantID/resolve/main/models/InstantID-1.0.safetensors
+    unpack: false
+  - name: rvm_mobilenetv3
+    version: v1
+    url: https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0/rvm_mobilenetv3.pth
+    unpack: false
+  - name: midas_dpt_large
+    version: v3
+    url: https://github.com/isl-org/MiDaS/releases/download/v3/dpt_large-midas-2f21e586.pt
+    unpack: false
+  - name: omnidata_normals
+    version: v1
+    # Provide URL/S3 for Omnidata normals model (for high-quality normal control)
+    # url: https://...
+    # s3_uri: s3://...
+    unpack: false
 # - name: stable_viton
 #   version: v1
 #   sha256: "<sha256>"
 #   s3_uri: "s3://my-bucket/path/to/stable_viton_v1.tar.gz"
 #   unpack: true
-
+# - name: smplx
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/smplx_models.tar.gz"
+#   unpack: true
+# - name: ghum
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/ghum_models.tar.gz"
+#   unpack: true
+# - name: openpose_models
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/openpose_models.zip"
+#   unpack: true
+# - name: gp_vton
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/gp_vton_weights.tar.gz"
+#   unpack: true
+# - name: recloth_viton
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/recloth_viton_weights.tar.gz"
+#   unpack: true
+# - name: bgm_v2
+#   version: v1
+#   sha256: "<sha256>"
+#   s3_uri: "s3://my-bucket/path/to/background_matting_v2.pth"
+#   unpack: false

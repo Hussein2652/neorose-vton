@@ -496,6 +496,35 @@ def _startup():
                         set_artifact_local(spec.name, spec.version, local, size)
                     except Exception:
                         pass
+            # Also prefetch HF models if configured
+            if os.environ.get("PREFETCH_HF_MODELS", "0") == "1":
+                try:
+                    from huggingface_hub import snapshot_download  # type: ignore
+                    # SDXL base/refiner + common controlnets + SDXL turbo + Flux
+                    base = os.environ.get("SDXL_BASE_ID", "stabilityai/stable-diffusion-xl-base-1.0")
+                    refiner = os.environ.get("SDXL_REFINER_ID", "stabilityai/stable-diffusion-xl-refiner-1.0")
+                    turbo = os.environ.get("SDXL_MODEL_ID", "stabilityai/sdxl-turbo")
+                    flux = os.environ.get("FLUX_MODEL_ID", "black-forest-labs/FLUX.1-dev")
+                    cn_ids = []
+                    cn_env = os.environ.get("SDXL_CN_IDS")
+                    if cn_env:
+                        cn_ids = [s.strip() for s in cn_env.split(',') if s.strip()]
+                    else:
+                        cn_ids = [
+                            os.environ.get("SDXL_CN_CANNY", "diffusers/controlnet-canny-sdxl-1.0"),
+                            os.environ.get("SDXL_CN_POSE", "diffusers/controlnet-openpose-sdxl-1.0"),
+                            os.environ.get("SDXL_CN_DEPTH", "diffusers/controlnet-depth-sdxl-1.0"),
+                            os.environ.get("SDXL_CN_NORMAL", "diffusers/controlnet-normal-sdxl-1.0"),
+                            os.environ.get("SDXL_CN_SEG", "diffusers/controlnet-seg-sdxl-1.0"),
+                        ]
+                    ids = [base, refiner, turbo, flux] + cn_ids
+                    for mid in ids:
+                        try:
+                            snapshot_download(repo_id=mid, local_files_only=False)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
     except Exception as e:
         # Log but don't fail startup
         import logging

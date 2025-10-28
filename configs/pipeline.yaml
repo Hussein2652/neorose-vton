@@ -5,8 +5,8 @@ finisher:
   steps: 38
   cfg: 6.2
   res_long: 1344
-  backend: local  # local | kling
-  escalate_on_fail: false
+  backend: sdxl_controlnet  # local | kling | remote | sdxl | flux | sdxl_controlnet
+  escalate_on_fail: true
   ctrl:
     pose: 0.55
     depth: 0.65
@@ -36,15 +36,15 @@ io_contracts:
 
 vton:
   enabled: true
-  provider: local  # local | stableviton
+  provider: stableviton  # local | stableviton | remote
 
 providers:
-  segmentation: local  # local | torchvision | remote
-  pose: mediapipe  # mediapipe | yolov8 | remote
-  geometry: stub  # stub | smplx | remote
+  segmentation: torchvision  # local | torchvision | remote
+  pose: yolov8  # mediapipe | yolov8 | remote
+  geometry: smplx  # stub | smplx | remote
 
 post:
-  upscaler: none  # none | realesrgan
+  upscaler: realesrgan  # none | realesrgan
   face_restore: false
 
 qa_thresholds:

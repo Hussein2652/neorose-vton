@@ -161,7 +161,20 @@ def ensure_artifact(spec: ArtifactSpec) -> Tuple[str, bool]:
                     raise ValueError("SHA256 mismatch for artifact")
 
             # Move to final and optionally unpack
-            final_path = os.path.join(base_dir, os.path.basename(tmp_file))
+            # Derive final filename from URL/S3 key when possible
+            fname = "artifact.bin"
+            if spec.url:
+                try:
+                    fname = os.path.basename(spec.url.split("?")[0]) or fname
+                except Exception:
+                    pass
+            elif spec.s3_uri:
+                try:
+                    key = spec.s3_uri[len("s3://"):].split("/", 1)[1]
+                    fname = os.path.basename(key) or fname
+                except Exception:
+                    pass
+            final_path = os.path.join(base_dir, fname)
             shutil.move(tmp_file, final_path)
             if spec.unpack:
                 unpack_dir = os.path.join(base_dir, "unpacked")
@@ -180,4 +193,3 @@ def ensure_artifact(spec: ArtifactSpec) -> Tuple[str, bool]:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
             except Exception:
                 pass
-
