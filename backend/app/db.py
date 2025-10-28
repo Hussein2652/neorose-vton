@@ -31,6 +31,7 @@ class JobORM(Base):
     garment_front_path: Mapped[str] = mapped_column(Text)
     garment_side_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     result_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(
@@ -104,4 +105,3 @@ def get_job(job_id: str) -> Optional[JobORM]:
         # Detach for safe return
         s.expunge(job)
         return job
-

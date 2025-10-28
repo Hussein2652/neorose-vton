@@ -1,6 +1,7 @@
 from typing import Optional
 from pipeline.pipeline import VFRPipeline
 from backend.app.config import settings
+from .storage import Storage
 
 
 def run_tryon_job(
@@ -14,5 +15,6 @@ def run_tryon_job(
         garment_front_path=garment_front_path,
         garment_side_path=garment_side_path,
     )
-    return {"result_path": result.output_path}
-
+    # Optionally publish to S3/CDN
+    result_url = Storage.publish_result(result.output_path)
+    return {"result_path": result.output_path, "result_url": result_url}

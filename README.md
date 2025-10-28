@@ -59,6 +59,13 @@ Use Celery + Redis (Optional)
   - uvicorn backend.app.main:app --reload
   - Jobs will be enqueued to the Celery worker; status is synced via task id.
 
+Full Docker Setup (API + Celery + Redis + Postgres)
+- Run all services:
+  - docker compose up -d --build redis postgres celery_worker api
+  - API available at http://127.0.0.1:8000
+  - Static UI at http://127.0.0.1:8000/web
+  - Run Alembic migrations automatically via api entrypoint.
+
 Database Migrations (Alembic)
 - Ensure dependencies installed, then run:
   - chmod +x scripts/db_upgrade.sh
@@ -74,6 +81,24 @@ React Frontend
   - npm install
   - npm run dev
   - Opens on http://127.0.0.1:5173 (proxy to API is configured)
+
+Authentication (Optional)
+- Enable auth enforcement: `export AUTH_REQUIRED=1`
+- Firebase: `export FIREBASE_ENABLED=1` and ensure default credentials are set via `GOOGLE_APPLICATION_CREDENTIALS`.
+- API key fallback: set `API_KEY=...` and send `x-api-key` header.
+
+Rate Limiting (Optional)
+- Enable: `export RATE_LIMIT_ENABLED=1`
+- Configure window/limit: `RL_WINDOW` (seconds), `RL_LIMIT` (requests/window). Uses Redis.
+
+S3/MinIO Storage + CDN (Optional)
+- Keep local files for processing, but publish results to S3/CDN:
+  - `export STORAGE_BACKEND=s3`
+  - `export S3_BUCKET=...`
+  - `export S3_REGION=...`
+  - Optional: `S3_ENDPOINT_URL` (for MinIO), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PREFIX`.
+  - Optional: `CDN_BASE_URL` to build public URLs; otherwise uses a presigned URL.
+  - `RESULT_REDIRECT=1` makes `/v1/jobs/{id}/result` redirect to the S3/CDN URL when available.
 
 4) Run Local Demo (no API)
    - Provide a user and garment image; outputs a composite result to storage:

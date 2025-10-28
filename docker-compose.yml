@@ -31,6 +31,28 @@ services:
       - postgres
     command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      - USE_CELERY=1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql+psycopg://vfr:vfr@postgres:5432/vfr
+      - REDIS_URL=redis://redis:6379/2
+      - VFR_CONFIG=/app/configs/pipeline.yaml
+      - STORAGE_BACKEND=local
+      - AUTH_REQUIRED=0
+      - RATE_LIMIT_ENABLED=1
+      - RL_LIMIT=60
+      - RL_WINDOW=60
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - postgres
+      - celery_worker
+
 volumes:
   pgdata:
-

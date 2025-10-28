@@ -57,12 +57,13 @@ class Jobs:
                 result = job.func(**job.kwargs)
                 if isinstance(result, dict) and "result_path" in result:
                     job.result_path = result["result_path"]
+                    job_result_url = result.get("result_url") if isinstance(result, dict) else None
                 job.status = "completed"
                 try:
                     from .db import update_job
                     from .cache import cache_set_job
 
-                    update_job(job.id, status="completed", result_path=job.result_path)
+                    update_job(job.id, status="completed", result_path=job.result_path, result_url=job_result_url)
                     cache_set_job(job.id, status="completed", result_path=job.result_path)
                 except Exception:
                     pass

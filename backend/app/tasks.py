@@ -20,7 +20,7 @@ def run_tryon_task(job_id: str, user_image_path: str, garment_front_path: str, g
             garment_side_path=garment_side_path,
         )
         try:
-            update_job(job_id, status="completed", result_path=result.get("result_path"))
+            update_job(job_id, status="completed", result_path=result.get("result_path"), result_url=result.get("result_url"))
             cache_set_job(job_id, status="completed", result_path=result.get("result_path"))
         except Exception:
             pass

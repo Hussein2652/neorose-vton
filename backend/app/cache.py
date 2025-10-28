@@ -17,7 +17,7 @@ def _client() -> Optional[redis.Redis]:
         return None
 
 
-def cache_set_job(job_id: str, status: str, result_path: str | None = None, error: str | None = None) -> None:
+def cache_set_job(job_id: str, status: str, result_path: str | None = None, error: str | None = None, result_url: str | None = None) -> None:
     r = _client()
     if not r:
         return
@@ -26,6 +26,8 @@ def cache_set_job(job_id: str, status: str, result_path: str | None = None, erro
         payload["result_path"] = result_path
     if error:
         payload["error"] = error
+    if result_url:
+        payload["result_url"] = result_url
     key = f"job:{job_id}"
     r.setex(key, CACHE_TTL, str(payload))
 
@@ -45,4 +47,3 @@ def cache_get_job(job_id: str) -> Optional[dict]:
         return ast.literal_eval(v.decode("utf-8"))
     except Exception:
         return None
-

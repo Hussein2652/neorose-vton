@@ -10,4 +10,4 @@ class JobStatusResponse(BaseModel):
     status: str
     error: str | None = None
     result_path: str | None = None
-
+    result_url: str | None = None

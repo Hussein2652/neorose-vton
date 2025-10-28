@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +9,8 @@ from .storage import Storage
 from .pipeline_runner import run_tryon_job
 from .db import init_db, create_job, get_job, update_job
 from .cache import cache_get_job, cache_set_job
+from .auth import require_auth
+from .ratelimit import rate_limit
 
 USE_CELERY = os.environ.get("USE_CELERY", "0") == "1"
 if USE_CELERY:
@@ -28,6 +30,8 @@ async def create_tryon_job(
     user_image: UploadFile = File(...),
     garment_front: UploadFile = File(...),
     garment_side: UploadFile | None = File(None),
+    _user=Depends(require_auth),
+    _rl=Depends(rate_limit),
 ):
     try:
         # Save uploads
@@ -79,7 +83,7 @@ async def create_tryon_job(
 
 
 @app.get("/v1/jobs/{job_id}", response_model=JobStatusResponse)
-def get_job_status(job_id: str):
+def get_job_status(job_id: str, _rl: None = Depends(rate_limit)):
     # Try cache first
     c = cache_get_job(job_id)
     db_job = get_job(job_id)
@@ -104,17 +108,27 @@ def get_job_status(job_id: str):
             pass
     status = c.get("status") if c else db_job.status
     result_path = c.get("result_path") if c else db_job.result_path
+    result_url = c.get("result_url") if c else db_job.result_url
     error = c.get("error") if c else db_job.error
-    return JobStatusResponse(job_id=job_id, status=status, error=error, result_path=result_path)
+    return JobStatusResponse(job_id=job_id, status=status, error=error, result_path=result_path, result_url=result_url)
+
+
+from fastapi.responses import RedirectResponse
 
 
 @app.get("/v1/jobs/{job_id}/result")
-def get_job_result(job_id: str):
+def get_job_result(job_id: str, _rl: None = Depends(rate_limit)):
     db_job = get_job(job_id)
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if db_job.status != "completed" or not db_job.result_path:
+    if db_job.status != "completed" or not (db_job.result_path or db_job.result_url):
         raise HTTPException(status_code=409, detail="Job not completed yet")
+    # If S3/CDN URL exists and redirect is enabled, redirect
+    if os.environ.get("RESULT_REDIRECT", "1") == "1" and db_job.result_url:
+        return RedirectResponse(url=db_job.result_url, status_code=307)
+    # Else serve local file path
+    if not db_job.result_path:
+        raise HTTPException(status_code=404, detail="Local result not available")
     return FileResponse(db_job.result_path, filename="vfr_result.jpg")
 
 
