@@ -65,6 +65,8 @@ services:
       - RATE_LIMIT_ENABLED=1
       - RL_LIMIT=60
       - RL_WINDOW=60
+      - REMOTE_FINISHER_URL=http://remote_worker:9000
+      - REMOTE_VTON_URL=http://remote_worker:9000
     ports:
       - "8000:8000"
     depends_on:
@@ -72,6 +74,7 @@ services:
       - postgres
       - celery_worker
       - migrate
+      - remote_worker
     healthcheck:
       test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n  r = urllib.request.urlopen('http://localhost:8000/health', timeout=2)\n  sys.exit(0 if r.status==200 else 1)\nexcept Exception:\n  sys.exit(1)\nPY"]
       interval: 5s
@@ -122,3 +125,9 @@ volumes:
   pgdata:
   minio_data:
   app_storage:
+  remote_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.remote
+    ports:
+      - "9000:9000"

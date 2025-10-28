@@ -1,0 +1,33 @@
+version: '3.9'
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api.gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - HF_HOME=/app/storage/models/hf
+      - TORCH_HOME=/app/storage/models/torch
+    volumes:
+      - app_storage:/app/storage
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - HF_HOME=/app/storage/models/hf
+      - TORCH_HOME=/app/storage/models/torch
+    volumes:
+      - app_storage:/app/storage
+volumes:
+  app_storage:
+

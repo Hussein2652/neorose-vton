@@ -253,3 +253,27 @@ Monitoring (Optional)
   - docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build prometheus grafana
 - Prometheus: http://127.0.0.1:9090 (scrapes API /metrics)
 - Grafana: http://127.0.0.1:3000 (admin/admin by default)
+GPU Profile (Optional)
+- Use the GPU Dockerfile and compose override to enable CUDA for API/worker:
+  - docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build api celery_worker
+  - Requires a host with NVIDIA drivers and Docker GPU support.
+
+Remote Worker (Optional)
+- A simple remote worker is included for testing `FINISHER_BACKEND=remote` and `vton.provider: remote`:
+  - docker compose up -d --build remote_worker
+  - The API is preconfigured to use http://remote_worker:9000 for remote calls.
+
+Provider Selection
+- Configure providers in `configs/pipeline.yaml`:
+  - finisher.backend: local | kling | remote | sdxl | flux
+  - vton.provider: local | stableviton | remote
+  - providers.segmentation: local | torchvision | remote
+  - providers.pose: mediapipe | yolov8 | remote
+  - providers.geometry: stub | smplx | remote
+  - post.upscaler: none | realesrgan; post.face_restore: true|false
+
+ML Extras Installation
+- For advanced QA/finisher/providers, install ML extras (bare metal or in GPU image):
+  - pip install -r requirements-ml.txt
+  - Diffusers (SDXL/Flux) models download into persistent cache at `storage/models/hf` and are reused.
+  - TorchVision/Ultralytics download weights once into `storage/models/torch` (set by env automatically).

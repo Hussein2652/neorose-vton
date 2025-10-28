@@ -3,3 +3,8 @@ torch
 torchvision
 lpips
 open-clip-torch
+diffusers
+transformers
+ultralytics
+realesrgan
+huggingface-hub

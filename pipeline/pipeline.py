@@ -23,8 +23,12 @@ from providers.vton_local import LocalVTON
 from providers.stable_vton_stub import StableVTON
 from providers.remote import RemoteFinisher, RemoteVTON, RemoteError
 from providers.finisher_diffusers import SDXLDiffusersFinisher, FluxDiffusersFinisher
+from providers.finisher_sdxl_controlnet import SDXLControlNetFinisher
 from providers.upscale_esrgan import RealESRGANUpscaler
 from providers.face_codeformer import CodeFormerRestorer
+from providers.segmentation_torchvision import TorchVisionPersonSegmenter
+from providers.pose_ultralytics import YOLOv8PoseExtractor
+from providers.geometry_smplx_stub import SMPLXGeometry
 
 
 @dataclass
@@ -36,10 +40,28 @@ class VFRPipeline:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         # Build providers
-        self.person = LocalPersonParser()
-        self.pose = LocalPoseExtractor()
+        # Segmentation provider
+        seg = str(self.cfg.get("providers.segmentation", "local")).lower()
+        if seg == "torchvision":
+            self.person = TorchVisionPersonSegmenter()
+        else:
+            self.person = LocalPersonParser()
+
+        # Pose provider
+        posep = str(self.cfg.get("providers.pose", "mediapipe")).lower()
+        if posep == "yolov8":
+            self.pose = YOLOv8PoseExtractor()
+        else:
+            self.pose = LocalPoseExtractor()
+
         self.warper = LocalGarmentWarper()
-        self.geometry = LocalGeometryFitter()
+
+        # Geometry provider
+        geom = str(self.cfg.get("providers.geometry", "stub")).lower()
+        if geom == "smplx":
+            self.geometry = SMPLXGeometry()
+        else:
+            self.geometry = LocalGeometryFitter()
         backend = self.cfg.get("finisher_backend", "local")
         if backend == "kling":
             self.finisher = KlingFinisher()
@@ -50,6 +72,8 @@ class VFRPipeline:
                 self.finisher = LocalFinisher()
         elif backend == "sdxl":
             self.finisher = SDXLDiffusersFinisher()
+        elif backend == "sdxl_controlnet":
+            self.finisher = SDXLControlNetFinisher()
         elif backend == "flux":
             self.finisher = FluxDiffusersFinisher()
         else:

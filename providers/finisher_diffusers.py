@@ -35,7 +35,8 @@ class SDXLDiffusersFinisher:
         im = Image.open(soft_render_path).convert("RGB")
         if not self._pipe:
             # Fallback: gentle sharpen
-            im = im.filter(Image.Filter.SHARPEN)  # type: ignore[attr-defined]
+            from PIL import ImageFilter
+            im = im.filter(ImageFilter.SHARPEN)
             out = os.path.join(out_dir, "sdxl_fallback.png")
             im.save(out)
             return out
@@ -58,4 +59,3 @@ class SDXLDiffusersFinisher:
 class FluxDiffusersFinisher(SDXLDiffusersFinisher):
     def __init__(self, model_id: Optional[str] = None) -> None:
         super().__init__(model_id or os.environ.get("FLUX_MODEL_ID", "black-forest-labs/FLUX.1-dev"))
-
