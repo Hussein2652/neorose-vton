@@ -38,6 +38,15 @@ vton:
   enabled: true
   provider: local  # local | stableviton
 
+providers:
+  segmentation: local  # local | torchvision | remote
+  pose: mediapipe  # mediapipe | yolov8 | remote
+  geometry: stub  # stub | smplx | remote
+
+post:
+  upscaler: none  # none | realesrgan
+  face_restore: false
+
 qa_thresholds:
   garment_fidelity_clip_min: 0.28
   garment_fidelity_lpips_max: 0.32

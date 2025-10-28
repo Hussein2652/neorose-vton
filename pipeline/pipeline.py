@@ -22,6 +22,9 @@ from .vton_expert import apply_vton
 from providers.vton_local import LocalVTON
 from providers.stable_vton_stub import StableVTON
 from providers.remote import RemoteFinisher, RemoteVTON, RemoteError
+from providers.finisher_diffusers import SDXLDiffusersFinisher, FluxDiffusersFinisher
+from providers.upscale_esrgan import RealESRGANUpscaler
+from providers.face_codeformer import CodeFormerRestorer
 
 
 @dataclass
@@ -45,6 +48,10 @@ class VFRPipeline:
                 self.finisher = RemoteFinisher()
             except Exception:
                 self.finisher = LocalFinisher()
+        elif backend == "sdxl":
+            self.finisher = SDXLDiffusersFinisher()
+        elif backend == "flux":
+            self.finisher = FluxDiffusersFinisher()
         else:
             self.finisher = LocalFinisher()
         self.post = LocalPostProcessor()
@@ -59,6 +66,10 @@ class VFRPipeline:
                 self.vton = LocalVTON()
         else:
             self.vton = LocalVTON()
+
+        # Optional post providers
+        self.upscaler = RealESRGANUpscaler() if str(self.cfg.get("post.upscaler", "")).lower() == "realesrgan" else None
+        self.face_restorer = CodeFormerRestorer() if bool(self.cfg.get("post.face_restore", False)) else None
 
     @classmethod
     def from_settings(cls, settings, overrides: Optional[dict] = None) -> "VFRPipeline":
@@ -169,6 +180,13 @@ class VFRPipeline:
             polished_path = self.finisher.process(draped.soft_render_path, fin_dir, denoise=denoise, controls=controls)
             post_dir = os.path.join(work_root, f"post_try_{attempts}")
             final_path = self.post.process(polished_path, post_dir)
+            # Optional post chain
+            if self.upscaler:
+                up_dir = os.path.join(work_root, f"upscale_try_{attempts}")
+                final_path = self.upscaler.process(final_path, up_dir)
+            if self.face_restorer:
+                fr_dir = os.path.join(work_root, f"face_try_{attempts}")
+                final_path = self.face_restorer.process(final_path, fr_dir)
             # QA
             scores = self.qa.evaluate(
                 final_path,

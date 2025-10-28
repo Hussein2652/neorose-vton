@@ -30,6 +30,18 @@ class Finisher(Protocol):
     ) -> str: ...
 
 
+class Upscaler(Protocol):
+    def process(self, image_path: str, out_dir: str) -> str: ...
+
+
+class FaceRestorer(Protocol):
+    def process(self, image_path: str, out_dir: str) -> str: ...
+
+
+class Matting(Protocol):
+    def process(self, image_path: str, out_dir: str) -> tuple[str, Optional[str]]: ...
+
+
 class PostProcessor(Protocol):
     def process(self, polished_path: str, out_dir: str) -> str: ...
 
