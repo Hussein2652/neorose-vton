@@ -74,6 +74,11 @@ def _download_http(url: str, dest_path: str, max_retries: int = 6) -> None:
     chunk_size = 4 * 1024 * 1024  # 4 MB
     session = requests.Session()
     headers_base = {"Accept-Encoding": "identity", "User-Agent": "neorose-prefetch/1.0"}
+    # Hugging Face token support for gated/large files
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    if "huggingface.co" in url and hf_token:
+        headers_base["Authorization"] = f"Bearer {hf_token}"
+        headers_base["Referer"] = "https://huggingface.co"
 
     while True:
         attempt += 1
