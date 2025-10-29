@@ -34,7 +34,8 @@ def snapshot_hf(repo_id: str, models_dir: str) -> str:
 
     local_dir = os.path.join(models_dir, 'snapshots', san(repo_id))
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download(repo_id=repo_id, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
+    token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN') or os.environ.get('HUGGINGFACEHUB_API_TOKEN')
+    snapshot_download(repo_id=repo_id, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
     return local_dir
 
 
@@ -93,4 +94,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

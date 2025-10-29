@@ -164,7 +164,10 @@ def ensure_artifact(spec: ArtifactSpec) -> Tuple[str, bool]:
     - Only downloads once per name/version; verifies SHA256 if provided.
     """
     _safe_makedirs(MODELS_DIR)
-    base_dir = os.path.join(MODELS_DIR, spec.name, spec.version)
+    # Coerce to str to handle YAML numeric versions (e.g., 20190826, 1.0)
+    name_str = str(spec.name)
+    version_str = str(spec.version)
+    base_dir = os.path.join(MODELS_DIR, name_str, version_str)
     _safe_makedirs(base_dir)
     marker = os.path.join(base_dir, ".complete")
 
@@ -178,7 +181,7 @@ def ensure_artifact(spec: ArtifactSpec) -> Tuple[str, bool]:
                 return entries[0], False
             return base_dir, False
 
-    lock_key = f"artifact_{spec.name}_{spec.version}"
+    lock_key = f"artifact_{name_str}_{version_str}"
     with FileLock(lock_key):
         # Check again inside lock
         if os.path.exists(marker) and (spec.sha256 is None or any(os.scandir(base_dir))):

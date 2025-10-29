@@ -512,11 +512,12 @@ def _startup():
                     import re
                     def san(s: str) -> str:
                         return re.sub(r'[^a-zA-Z0-9_.-]+', '-', s)
+                    token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN') or os.environ.get('HUGGINGFACEHUB_API_TOKEN')
                     for mid in ids:
                         try:
                             local_dir = os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', san(mid))
                             os.makedirs(local_dir, exist_ok=True)
-                            snapshot_download(repo_id=mid, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
+                            snapshot_download(repo_id=mid, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
                         except Exception:
                             pass
                 except Exception:
