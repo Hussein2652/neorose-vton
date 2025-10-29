@@ -82,6 +82,15 @@ def main() -> None:
             entry["sha256_match"] = (sha256_file(local).lower() == spec.sha256.lower())
         registry["artifacts"].append(entry)
 
+        # Post-process quirks: SourceForge 'download' filename for SCHP LIP
+        try:
+            if spec.name == 'schp_lip' and os.path.isfile(local) and os.path.basename(local) == 'download':
+                target = os.path.join(os.path.dirname(local), 'exp-schp-201908261155-lip.pth')
+                os.replace(local, target)
+                entry["local"] = target
+        except Exception:
+            pass
+
     # HF snapshots
     for repo_id in cfg.get('hf_models', []) or []:
         local_dir = snapshot_hf(repo_id, args.models_dir)

@@ -1,6 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -12,6 +13,7 @@ services:
 
   postgres:
     image: postgres:15-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: vfr
       POSTGRES_PASSWORD: vfr
@@ -40,7 +42,7 @@ services:
       - HF_HOME=/app/storage/models/hf
       - TORCH_HOME=/app/storage/models/torch
       - PREFETCH_MODELS=1
-      - PREFETCH_HF_MODELS=1
+      - PREFETCH_HF_MODELS=0
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8x/yolov8x-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
       - SDXL_BASE_PATH=/app/storage/models/sdxl_base/1.0/sd_xl_base_1.0.safetensors
@@ -62,6 +64,7 @@ services:
       - redis
       - postgres
     command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
+    restart: unless-stopped
     volumes:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
@@ -84,7 +87,7 @@ services:
       - HF_HOME=/app/storage/models/hf
       - TORCH_HOME=/app/storage/models/torch
       - PREFETCH_MODELS=1
-      - PREFETCH_HF_MODELS=1
+      - PREFETCH_HF_MODELS=0
       - MODELS_CONFIG=/app/configs/models.yaml
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8x/yolov8x-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth
@@ -110,6 +113,7 @@ services:
       - S3_SECRET_ACCESS_KEY=minioadmin
       - S3_PREFIX=vfr/
       - RESULT_REDIRECT=1
+    restart: unless-stopped
     ports:
       - "8000:8000"
     depends_on:
@@ -140,6 +144,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
@@ -152,6 +157,7 @@ services:
 
   minio_setup:
     image: minio/mc:latest
+    restart: on-failure
     depends_on:
       - minio
     environment:
@@ -172,9 +178,11 @@ services:
       dockerfile: Dockerfile.remote
     ports:
       - "9000:9000"
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
+    restart: unless-stopped
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
@@ -186,6 +194,7 @@ services:
 
   grafana:
     image: grafana/grafana-oss:latest
+    restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     ports:

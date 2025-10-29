@@ -564,16 +564,24 @@ def health_models() -> dict:
         (smplx_home, 'dir'),
         (smplx_npz, 'file'),
         (pixie_home, 'dir'),
-        # Accept either direct big-lama.pt under v1 or inside unpacked/big-lama/
-        (lama_primary, 'file'),
-        (lama_unpacked, 'file'),
     ]
 
+    # Evaluate existence
+    exists_map: dict[str, bool] = {}
     for p, t in checks:
         exists = os.path.isfile(p) if t == 'file' else os.path.isdir(p)
+        exists_map[p] = exists
         required.append({"path": p, "type": t, "exists": exists})
 
-    ok = all(r["exists"] for r in required)
+    # LaMa can be either location
+    lama_primary_exists = os.path.isfile(lama_primary)
+    lama_unpacked_exists = os.path.isfile(lama_unpacked)
+    required.append({"path": lama_primary, "type": 'file', "exists": lama_primary_exists})
+    required.append({"path": lama_unpacked, "type": 'file', "exists": lama_unpacked_exists})
+
+    mandatory_ok = all(exists_map.values())
+    lama_ok = (lama_primary_exists or lama_unpacked_exists)
+    ok = mandatory_ok and lama_ok
     return {"ok": ok, "items": required}
 
 @app.on_event("shutdown")
