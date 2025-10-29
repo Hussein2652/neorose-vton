@@ -56,14 +56,6 @@ artifacts:
     unpack: false
 
   # --- Garment UV/inpaint + coarse mesh + fabric classifier ---
-  - name: big_lama
-    version: v1
-    url: https://huggingface.co/saic-mdal/Big-Lama/resolve/main/big-lama.pt
-    unpack: false
-  - name: triposr
-    version: v1
-    url: https://huggingface.co/stabilityai/TripoSR/resolve/main/weights.ckpt
-    unpack: false
   - name: clip_vit_l14
     version: v1
     url: https://huggingface.co/openai/clip-vit-large-patch14/resolve/main/pytorch_model.bin
@@ -99,3 +91,7 @@ hf_models:
   # Snapshot IP-Adapter repos to avoid fragile direct-file links
   - h94/IP-Adapter
   - h94/IP-Adapter-FaceID
+  # LaMa (Big-Lama) snapshot for UV inpainting weights
+  - saic-mdal/LaMa
+  # TripoSR snapshot (coarse clothed human mesh)
+  - stabilityai/TripoSR
