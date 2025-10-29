@@ -63,7 +63,7 @@ services:
       - postgres
     command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
     volumes:
-      - app_storage:/app/storage
+      - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
     gpus: ${GPU_REQUEST:-all}
 
@@ -124,7 +124,7 @@ services:
       timeout: 5s
       retries: 30
     volumes:
-      - app_storage:/app/storage
+      - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
     gpus: ${GPU_REQUEST:-all}
 
@@ -196,4 +196,3 @@ services:
 volumes:
   pgdata:
   minio_data:
-  app_storage:
