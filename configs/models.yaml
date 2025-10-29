@@ -64,7 +64,7 @@ artifacts:
   # --- Segmentation (pick one; we use LIP) ---
   - name: schp_lip
     version: 20190826
-    url: https://huggingface.co/levindabhi/Self-Correction-Human-Parsing/resolve/main/exp-schp-201908261155-lip.pth
+    url: https://sourceforge.net/projects/self-correction/files/Self-Correction-Human-Parsing/exp-schp-201908261155-lip.pth/download
     unpack: false
 
   # --- SDXL base/refiner (local-file loading) ---
