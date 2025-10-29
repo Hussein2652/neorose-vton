@@ -176,8 +176,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.remote
-    ports:
-      - "9000:9000"
     restart: unless-stopped
 
   prometheus:

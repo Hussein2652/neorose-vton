@@ -33,6 +33,41 @@ if USE_CELERY:
 app = FastAPI(title="Neorose VFR API", version="0.1.0")
 
 
+# Configure CORS and mount auxiliary apps/routes at import time
+try:
+    origins = os.environ.get("CORS_ORIGINS", "*")
+    origin_list = [o.strip() for o in origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origin_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+except Exception:
+    # Safe-guard: if middleware cannot be added (should not happen before startup), continue
+    pass
+
+# Optional mounts (best-effort): static web, Prometheus, GraphQL, billing routes
+try:
+    app.mount("/web", StaticFiles(directory="frontend/web", html=True), name="web")
+except Exception:
+    pass
+try:
+    app.mount("/metrics", make_prom_app())
+except Exception:
+    pass
+try:
+    app.mount("/graphql", graphql_app)
+except Exception:
+    pass
+# Billing routes
+try:
+    app.include_router(billing_router, prefix="/v1")
+except Exception:
+    pass
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -438,32 +473,6 @@ def _startup():
     Storage.ensure_dirs()
     init_db()
     Jobs.ensure_worker()
-    # CORS from env
-    origins = os.environ.get("CORS_ORIGINS", "*")
-    origin_list = [o.strip() for o in origins.split(",") if o.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    try:
-        app.mount("/web", StaticFiles(directory="frontend/web", html=True), name="web")
-    except Exception:
-        pass
-    # Prometheus metrics endpoint
-    try:
-        app.mount("/metrics", make_prom_app())
-    except Exception:
-        pass
-    # GraphQL endpoint
-    try:
-        app.mount("/graphql", graphql_app)
-    except Exception:
-        pass
-    # Billing routes
-    app.include_router(billing_router, prefix="/v1")
 
     # Prefetch models if configured
     try:
@@ -485,7 +494,6 @@ def _startup():
                     # update registry info
                     try:
                         from .db import set_artifact_local
-                        import os
                         size = 0
                         if os.path.isdir(local):
                             for root, _dirs, files in os.walk(local):
