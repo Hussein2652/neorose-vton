@@ -280,6 +280,13 @@ def ingest_manual_assets(manual_dir: str) -> dict:
             if os.path.isdir(cand):
                 pixie_src = cand
                 break
+        # LaMa (big-lama) optional manual drop
+        lama_src = None
+        for name in ("lama_downloads", "lama"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                lama_src = cand
+                break
 
         # SMPL-X assets
         if smplx_src:
@@ -324,6 +331,28 @@ def ingest_manual_assets(manual_dir: str) -> dict:
                     else:
                         shutil.copy2(srcp, os.path.join(pixie_dst, fname))
                         report["actions"].append({"copied": [srcp, os.path.join(pixie_dst, fname)]})
+        # LaMa assets (look for big-lama.pt or big-lama.zip)
+        if lama_src:
+            lama_dst = os.path.join(MODELS_DIR, "big_lama", "v1")
+            os.makedirs(lama_dst, exist_ok=True)
+            for fname in os.listdir(lama_src):
+                srcp = os.path.join(lama_src, fname)
+                if os.path.isfile(srcp):
+                    if fname.lower() == "big-lama.pt":
+                        shutil.copy2(srcp, os.path.join(lama_dst, fname))
+                        report["actions"].append({"copied": [srcp, os.path.join(lama_dst, fname)]})
+                    elif fname.lower() == "big-lama.zip":
+                        with zipfile.ZipFile(srcp, "r") as zf:
+                            zf.extractall(lama_dst)
+                        # Normalize common layouts: ensure a convenience copy at v1/big-lama.pt if present inside a folder
+                        for root, _dirs, files in os.walk(lama_dst):
+                            if "big-lama.pt" in files:
+                                try:
+                                    shutil.copy2(os.path.join(root, "big-lama.pt"), os.path.join(lama_dst, "big-lama.pt"))
+                                except Exception:
+                                    pass
+                                break
+                        report["actions"].append({"unzipped": [srcp, lama_dst]})
     except Exception as e:  # pragma: no cover
         report["error"] = str(e)
     return report

@@ -7,7 +7,7 @@ PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
 help:
-	@echo "Targets: install, api, demo, seed, compose-up, compose-up-s3, compose-down, migrate, react-dev, compose-up-monitoring, prefetch, verify-models"
+	@echo "Targets: install, api, demo, seed, compose-up, compose-up-s3, compose-down, compose-down-volumes, migrate, react-dev, compose-up-monitoring, prefetch, verify-models, ingest-lama"
 
 install:
 	python -m venv $(VENV)
@@ -34,6 +34,10 @@ compose-up-s3:
 	docker compose -f docker-compose.yml -f docker-compose.s3.yml up -d --build redis postgres celery_worker api
 
 compose-down:
+	docker compose down
+
+# Explicitly remove volumes only when you really mean it
+compose-down-volumes:
 	docker compose down -v
 
 react-dev:
@@ -48,3 +52,6 @@ prefetch:
 verify-models:
 	@echo "GET /v1/health/models; expecting ok=true"; \
 	curl -sf http://127.0.0.1:8000/v1/health/models | python -c 'import sys,json; d=json.load(sys.stdin); print("models_ok=", d.get("ok")); sys.exit(0 if d.get("ok") else 1)'
+
+ingest-lama:
+	. $(VENV)/bin/activate || true; python scripts/ingest_lama.py --models-dir storage/models --manual-dir manual_downloads || true

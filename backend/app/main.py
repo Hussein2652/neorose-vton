@@ -542,6 +542,10 @@ def health_models() -> dict:
     zoe = os.path.join(os.environ.get("MODELS_DIR", "/app/storage/models"), "zoedepth_m12_nk", "v1", "ZoeD_M12_NK.pt")
     rvm = os.path.join(os.environ.get("MODELS_DIR", "/app/storage/models"), "rvm_mobilenetv3", "v1.0.0", "rvm_mobilenetv3.pth")
     esr = os.environ.get("REALESRGAN_WEIGHTS", "/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth")
+    models_root = os.environ.get("MODELS_DIR", "/app/storage/models")
+    lama_root = os.path.join(models_root, "big_lama", "v1")
+    lama_primary = os.path.join(lama_root, "big-lama.pt")
+    lama_unpacked = os.path.join(lama_root, "unpacked", "big-lama", "big-lama.pt")
 
     # Licensed geometry models (manual ingestion)
     smplx_home = os.environ.get("SMPLX_HOME", "/app/storage/models/smplx")
@@ -560,6 +564,9 @@ def health_models() -> dict:
         (smplx_home, 'dir'),
         (smplx_npz, 'file'),
         (pixie_home, 'dir'),
+        # Accept either direct big-lama.pt under v1 or inside unpacked/big-lama/
+        (lama_primary, 'file'),
+        (lama_unpacked, 'file'),
     ]
 
     for p, t in checks:
