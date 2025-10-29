@@ -58,7 +58,7 @@ artifacts:
   # --- Garment UV/inpaint + coarse mesh + fabric classifier ---
   - name: big_lama
     version: v1
-    url: https://huggingface.co/advimman/lama/resolve/main/big-lama.pt
+    url: https://huggingface.co/saic-mdal/Big-LaMA/resolve/main/big-lama.pt
     unpack: false
   - name: triposr
     version: v1
