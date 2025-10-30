@@ -320,18 +320,28 @@ def ingest_manual_assets(manual_dir: str) -> dict:
             for fname in os.listdir(pixie_src):
                 srcp = os.path.join(pixie_src, fname)
                 if os.path.isfile(srcp):
-                    if fname.lower().endswith(".tar"):
-                        # Use auto-detect mode to handle various tar formats
-                        with tarfile.open(srcp, "r:*") as tf:
-                            tf.extractall(pixie_dst)
-                        report["actions"].append({"untarred": [srcp, pixie_dst]})
-                    elif fname.lower().endswith(".zip"):
-                        with zipfile.ZipFile(srcp, "r") as zf:
-                            zf.extractall(pixie_dst)
-                        report["actions"].append({"unzipped": [srcp, pixie_dst]})
-                    else:
+                    try:
+                        if zipfile.is_zipfile(srcp):
+                            with zipfile.ZipFile(srcp, "r") as zf:
+                                zf.extractall(pixie_dst)
+                            report["actions"].append({"unzipped": [srcp, pixie_dst]})
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        if tarfile.is_tarfile(srcp):
+                            with tarfile.open(srcp, "r:*") as tf:
+                                tf.extractall(pixie_dst)
+                            report["actions"].append({"untarred": [srcp, pixie_dst]})
+                            continue
+                    except Exception:
+                        pass
+                    # Fallback: copy as-is
+                    try:
                         shutil.copy2(srcp, os.path.join(pixie_dst, fname))
                         report["actions"].append({"copied": [srcp, os.path.join(pixie_dst, fname)]})
+                    except Exception:
+                        pass
         # LaMa assets (look for big-lama.pt or big-lama.zip)
         if lama_src:
             lama_dst = os.path.join(MODELS_DIR, "big_lama", "v1")
