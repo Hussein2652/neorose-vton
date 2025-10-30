@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     Integer,
+    BigInteger,
     select,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
@@ -152,7 +153,7 @@ class ModelArtifactORM(Base):
     s3_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
     local_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     downloaded_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
 
 
