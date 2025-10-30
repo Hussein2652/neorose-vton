@@ -552,8 +552,12 @@ def health_models() -> dict:
     esr = os.environ.get("REALESRGAN_WEIGHTS", "/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth")
     models_root = os.environ.get("MODELS_DIR", "/app/storage/models")
     lama_root = os.path.join(models_root, "big_lama", "v1")
-    lama_primary = os.path.join(lama_root, "big-lama.pt")
-    lama_unpacked = os.path.join(lama_root, "unpacked", "big-lama", "big-lama.pt")
+    lama_candidates = [
+        os.path.join(lama_root, "big-lama.pt"),
+        os.path.join(lama_root, "big-lama.ckpt"),
+        os.path.join(lama_root, "unpacked", "big-lama", "big-lama.pt"),
+        os.path.join(lama_root, "unpacked", "big-lama", "best.ckpt"),
+    ]
 
     # Licensed geometry models (manual ingestion)
     smplx_home = os.environ.get("SMPLX_HOME", "/app/storage/models/smplx")
@@ -581,14 +585,15 @@ def health_models() -> dict:
         exists_map[p] = exists
         required.append({"path": p, "type": t, "exists": exists})
 
-    # LaMa can be either location
-    lama_primary_exists = os.path.isfile(lama_primary)
-    lama_unpacked_exists = os.path.isfile(lama_unpacked)
-    required.append({"path": lama_primary, "type": 'file', "exists": lama_primary_exists})
-    required.append({"path": lama_unpacked, "type": 'file', "exists": lama_unpacked_exists})
+    # LaMa can be one of several weight file names/locations
+    lama_exists_flags = []
+    for p in lama_candidates:
+        ex = os.path.isfile(p)
+        lama_exists_flags.append(ex)
+        required.append({"path": p, "type": 'file', "exists": ex})
 
     mandatory_ok = all(exists_map.values())
-    lama_ok = (lama_primary_exists or lama_unpacked_exists)
+    lama_ok = any(lama_exists_flags)
     ok = mandatory_ok and lama_ok
     return {"ok": ok, "items": required}
 
