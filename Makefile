@@ -8,6 +8,7 @@ PIP := $(VENV)/bin/pip
 
 help:
 	@echo "Targets: install, api, demo, seed, compose-up, compose-up-s3, compose-down, compose-down-volumes, migrate, react-dev, compose-up-monitoring, prefetch, verify-models, ingest-lama"
+	@echo "Extra (optional): rclone-config, fetch-stableviton, verify-stableviton"
 
 install:
 	python -m venv $(VENV)
@@ -55,3 +56,35 @@ verify-models:
 
 ingest-lama:
 	. $(VENV)/bin/activate || true; python scripts/ingest_lama.py --models-dir storage/models --manual-dir manual_downloads || true
+
+# ---------- Optional helpers for large OneDrive downloads (run on host) ----------
+RCLONE_REMOTE ?= onedrive
+STABLEVITON_DIR ?= StableVITON
+
+rclone-config:
+	rclone config
+
+fetch-stableviton:
+	@mkdir -p storage/models/stableviton/weights
+	@echo "Copying StableVITON weights from $(RCLONE_REMOTE):$(STABLEVITON_DIR) -> storage/models/stableviton/weights";
+	rclone copy "$(RCLONE_REMOTE):$(STABLEVITON_DIR)/VITONHD.ckpt" storage/models/stableviton/weights --progress --checkers 8 --transfers 4 --retries 999 --low-level-retries 999 --retries-sleep 10s || true
+	rclone copy "$(RCLONE_REMOTE):$(STABLEVITON_DIR)/VITONHD_VAE_finetuning.ckpt" storage/models/stableviton/weights --progress --checkers 8 --transfers 4 --retries 999 --low-level-retries 999 --retries-sleep 10s || true
+	rclone copy "$(RCLONE_REMOTE):$(STABLEVITON_DIR)/VITONHD_PBE_pose.ckpt" storage/models/stableviton/weights --progress --checkers 8 --transfers 4 --retries 999 --low-level-retries 999 --retries-sleep 10s || true
+	@echo "Done. Files in storage/models/stableviton/weights:"; ls -lh storage/models/stableviton/weights || true
+
+verify-stableviton:
+	@python - <<'PY'
+import hashlib,sys
+from pathlib import Path
+p=Path('storage/models/stableviton/weights')
+missing=False
+for name in ['VITONHD.ckpt','VITONHD_VAE_finetuning.ckpt','VITONHD_PBE_pose.ckpt']:
+    f=p/name
+    if not f.exists():
+        print('MISSING', f)
+        missing=True
+        continue
+    h=hashlib.sha256(f.read_bytes()).hexdigest()
+    print(f'{f.name} sha256={h}')
+sys.exit(1 if missing else 0)
+PY
