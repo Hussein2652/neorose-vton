@@ -364,12 +364,35 @@ def ingest_manual_assets(manual_dir: str) -> dict:
         if schp_src:
             tp_dst = os.path.join("third_party", "schp")
             os.makedirs(tp_dst, exist_ok=True)
+            # Copy all files and unzip any repo zips into third_party/schp
             _copytree(schp_src, tp_dst)
+            for fn in os.listdir(schp_src):
+                srcp = os.path.join(schp_src, fn)
+                if os.path.isfile(srcp) and fn.lower().endswith('.zip'):
+                    try:
+                        with zipfile.ZipFile(srcp, 'r') as zf:
+                            zf.extractall(tp_dst)
+                        report["actions"].append({"unzipped": [srcp, tp_dst]})
+                    except Exception:
+                        pass
+            # Also place the LIP weights into the expected models dir
+            lip_dst_dir = os.path.join(MODELS_DIR, 'schp_lip', '20190826')
+            os.makedirs(lip_dst_dir, exist_ok=True)
+            for fn in os.listdir(schp_src):
+                if fn.endswith('.pth') and 'exp-schp-201908261155-lip' in fn:
+                    try:
+                        shutil.copy2(os.path.join(schp_src, fn), os.path.join(lip_dst_dir, fn))
+                        # Ensure canonical name exists
+                        dst_canon = os.path.join(lip_dst_dir, 'exp-schp-201908261155-lip.pth')
+                        shutil.copy2(os.path.join(schp_src, fn), dst_canon)
+                        report["actions"].append({"weights": [os.path.join(schp_src, fn), dst_canon]})
+                    except Exception:
+                        pass
             report["actions"].append({"third_party": [schp_src, tp_dst]})
 
         # StableVITON code/weights (optional)
         stv_src = None
-        for name in ("stableviton", "StableVITON", "stable_viton"):
+        for name in ("stableviton", "StableVITON", "stable_viton", "stableviton_downloads"):
             cand = os.path.join(manual_dir, name)
             if os.path.isdir(cand):
                 stv_src = cand
@@ -378,19 +401,33 @@ def ingest_manual_assets(manual_dir: str) -> dict:
             stv_tp = os.path.join("third_party", "stableviton")
             os.makedirs(stv_tp, exist_ok=True)
             _copytree(stv_src, stv_tp)
+            # Unzip repo archives into third_party/stableviton if present
+            for fn in os.listdir(stv_src):
+                srcp = os.path.join(stv_src, fn)
+                if os.path.isfile(srcp) and fn.lower().endswith('.zip'):
+                    try:
+                        with zipfile.ZipFile(srcp, 'r') as zf:
+                            zf.extractall(stv_tp)
+                        report["actions"].append({"unzipped": [srcp, stv_tp]})
+                    except Exception:
+                        pass
             report["actions"].append({"third_party": [stv_src, stv_tp]})
-        # Optional weights drop for StableVITON under manual_downloads/stableviton_weights or zip
-        stv_w_src = None
-        for name in ("stableviton_weights", "stable_viton_weights"):
-            cand = os.path.join(manual_dir, name)
-            if os.path.isdir(cand):
-                stv_w_src = cand
-                break
-        if stv_w_src:
+            # Copy any .ckpt weights found anywhere under the source to models/stableviton/weights
             stv_w_dst = os.path.join(MODELS_DIR, "stableviton", "weights")
             os.makedirs(stv_w_dst, exist_ok=True)
-            _copytree(stv_w_src, stv_w_dst)
-            report["actions"].append({"weights": [stv_w_src, stv_w_dst]})
+            copied = []
+            for root, _dirs, files in os.walk(stv_src):
+                for fn in files:
+                    if fn.lower().endswith('.ckpt'):
+                        srcp = os.path.join(root, fn)
+                        dstp = os.path.join(stv_w_dst, fn)
+                        try:
+                            shutil.copy2(srcp, dstp)
+                            copied.append((srcp, dstp))
+                        except Exception:
+                            pass
+            if copied:
+                report["actions"].append({"weights": copied})
     except Exception as e:  # pragma: no cover
         report["error"] = str(e)
     return report

@@ -16,12 +16,28 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image) -> Optiona
     Placeholder hook to call third_party.stableviton code if present.
     For now, do a simple alpha paste if code is not present.
     """
+    # Preferred: import a Python hook if present
     try:
         import importlib
         mod = importlib.import_module('third_party.stableviton.infer')
         if hasattr(mod, 'run_infer'):
             out = mod.run_infer(user_im, garment_im)  # type: ignore
             return out
+    except Exception:
+        pass
+    # Fallback: run a CLI if defined via env STABLEVITON_INFER_CMD
+    try:
+        import subprocess, tempfile
+        cmd_tpl = os.environ.get('STABLEVITON_INFER_CMD')
+        if cmd_tpl:
+            with tempfile.TemporaryDirectory() as td:
+                u = os.path.join(td, 'user.png'); g = os.path.join(td, 'garment.png'); o = os.path.join(td, 'out.png')
+                user_im.save(u); garment_im.save(g)
+                weights_dir = os.environ.get('STABLEVITON_WEIGHTS_DIR', os.path.join('storage','models','stableviton','weights'))
+                cmd = [s.replace('{USER}', u).replace('{GARMENT}', g).replace('{OUT}', o).replace('{WEIGHTS_DIR}', weights_dir) for s in cmd_tpl.split(' ') if s]
+                subprocess.run(cmd, check=True)
+                if os.path.exists(o):
+                    return Image.open(o).convert('RGB')
     except Exception:
         pass
     try:
@@ -52,4 +68,3 @@ async def infer(user: UploadFile = File(...), garment: UploadFile = File(...)):
         return Response(buf.getvalue(), media_type='image/png')
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
