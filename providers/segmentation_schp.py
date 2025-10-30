@@ -29,7 +29,20 @@ class SCHPSegmenter:
         self.cmd = os.environ.get("SCHP_INFER_CMD")
 
     def _default_cmd(self, image_path: str, out_dir: str) -> Optional[list[str]]:
-        # Try common inference entrypoints in the vendored repo
+        # Prefer our portable wrapper that calls SCHP simple_extractor
+        wrapper = os.path.join("scripts", "schp_infer.py")
+        if os.path.exists(wrapper):
+            return [
+                "python",
+                wrapper,
+                "--weights",
+                self.model_path,
+                "--image",
+                image_path,
+                "--out",
+                out_dir,
+            ]
+        # Try common inference entrypoints in the vendored repo (if someone provided their own)
         candidates = [
             os.path.join(self.repo_dir, "tools", "inference.py"),
             os.path.join(self.repo_dir, "inference.py"),
@@ -74,4 +87,3 @@ class SCHPSegmenter:
             return None
         except Exception:
             return None
-

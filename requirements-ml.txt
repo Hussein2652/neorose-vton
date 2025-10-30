@@ -10,3 +10,5 @@ realesrgan
 huggingface-hub
 controlnet-aux
 mediapipe
+onnxruntime-gpu
+insightface

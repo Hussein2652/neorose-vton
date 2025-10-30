@@ -108,6 +108,28 @@ class SDXLControlNetFinisher:
             except Exception:
                 self._has_ip_adapter = False  # type: ignore[attr-defined]
 
+            # Optional: Load FaceID PlusV2 SDXL + LoRA (offline)
+            self._has_faceid_adapter = False  # type: ignore[attr-defined]
+            try:
+                face_dir = os.environ.get("IP_ADAPTER_FACEID_DIR", os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', 'h94-IP-Adapter-FaceID'))
+                face_bin = os.environ.get("IP_ADAPTER_FACEID_BIN", "ip-adapter-faceid-plusv2_sdxl.bin")
+                face_lora = os.environ.get("IP_ADAPTER_FACEID_LORA", "ip-adapter-faceid-plusv2_sdxl_lora.safetensors")
+                bin_path = os.path.join(face_dir, face_bin)
+                lora_path = os.path.join(face_dir, face_lora)
+                if hasattr(self._pipe, 'load_ip_adapter') and os.path.exists(bin_path):
+                    try:
+                        self._pipe.load_ip_adapter(face_dir, weight_name=face_bin)
+                        self._has_faceid_adapter = True
+                    except Exception:
+                        pass
+                if hasattr(self._pipe, 'load_lora_weights') and os.path.exists(lora_path):
+                    try:
+                        self._pipe.load_lora_weights(face_dir, weight_name=face_lora)
+                    except Exception:
+                        pass
+            except Exception:
+                self._has_faceid_adapter = False  # type: ignore[attr-defined]
+
             # Load refiner from single safetensors if provided
             try:
                 if self.refiner_path and os.path.exists(self.refiner_path):
@@ -136,15 +158,22 @@ class SDXLControlNetFinisher:
             image.save(out)
             return out
         try:
-            ip_adapter_image = None
+            ip_adapter_images: List[Image.Image] = []
             if adapters:
                 # Prefer garment image for detail conditioning
                 g_path = adapters.get('garment_image') or adapters.get('garment')
                 if g_path and os.path.exists(g_path):
                     try:
-                        ip_adapter_image = Image.open(g_path).convert('RGB')
+                        ip_adapter_images.append(Image.open(g_path).convert('RGB'))
                     except Exception:
-                        ip_adapter_image = None
+                        pass
+                # Face image for identity (FaceID)
+                f_path = adapters.get('face_image') or adapters.get('user')
+                if f_path and os.path.exists(f_path):
+                    try:
+                        ip_adapter_images.append(Image.open(f_path).convert('RGB'))
+                    except Exception:
+                        pass
             # Build list of control images aligned with loaded ControlNets order
             control_images: List[Image.Image] = []
             cn_map_keys = [
@@ -199,13 +228,19 @@ class SDXLControlNetFinisher:
             )
             if control_images:
                 call_kwargs["controlnet_conditioning_scale"] = control_scales
-            # If IP-Adapter is loaded and we have a garment image, pass it
+            # If IP-Adapter(s) loaded and we have images, pass them (list supports multi-adapter in newer APIs)
             try:
-                if getattr(self, '_has_ip_adapter', False) and ip_adapter_image is not None:
-                    call_kwargs['ip_adapter_image'] = ip_adapter_image
-                    scale = float(os.environ.get('IP_ADAPTER_GARMENT_SCALE', '1.0'))
-                    if hasattr(self._pipe, 'set_ip_adapter_scale'):
-                        self._pipe.set_ip_adapter_scale(scale)
+                if (getattr(self, '_has_ip_adapter', False) or getattr(self, '_has_faceid_adapter', False)) and ip_adapter_images:
+                    call_kwargs['ip_adapter_image'] = ip_adapter_images if len(ip_adapter_images) > 1 else ip_adapter_images[0]
+                    g_scale = float(os.environ.get('IP_ADAPTER_GARMENT_SCALE', '1.0'))
+                    f_scale = float(os.environ.get('IP_ADAPTER_FACE_SCALE', '0.85'))
+                    scales: List[float] = []
+                    if getattr(self, '_has_ip_adapter', False) and ip_adapter_images:
+                        scales.append(g_scale)
+                    if getattr(self, '_has_faceid_adapter', False) and len(ip_adapter_images) > 1:
+                        scales.append(f_scale)
+                    if hasattr(self._pipe, 'set_ip_adapter_scale') and scales:
+                        self._pipe.set_ip_adapter_scale(scales if len(scales) > 1 else scales[0])
             except Exception:
                 pass
             result = self._pipe(**call_kwargs).images[0]
