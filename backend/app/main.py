@@ -265,10 +265,24 @@ def get_job_status(job_id: str, _rl: None = Depends(rate_limit)):
                 db_job = get_job(job_id) or db_job
         except Exception:
             pass
-    status = c.get("status") if c else db_job.status
-    result_path = c.get("result_path") if c else db_job.result_path
-    result_url = c.get("result_url") if c else db_job.result_url
-    error = c.get("error") if c else db_job.error
+    # Prefer DB status if it is terminal (completed/failed) to avoid stale cache showing 'queued'
+    if c:
+        cached_status = c.get("status")
+        if db_job.status in {"completed", "failed"} and cached_status not in {"completed", "failed"}:
+            status = db_job.status
+            result_path = db_job.result_path
+            result_url = db_job.result_url
+            error = db_job.error
+        else:
+            status = cached_status
+            result_path = c.get("result_path")
+            result_url = c.get("result_url")
+            error = c.get("error")
+    else:
+        status = db_job.status
+        result_path = db_job.result_path
+        result_url = db_job.result_url
+        error = db_job.error
     return JobStatusResponse(job_id=job_id, status=status, error=error, result_path=result_path, result_url=result_url)
 
 

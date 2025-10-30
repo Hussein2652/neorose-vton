@@ -17,7 +17,10 @@ def control_edges(user_image_path: str, out_dir: str) -> str:
     try:
         from controlnet_aux import HEDdetector  # type: ignore
         annot_dir = os.environ.get('ANNOTATOR_DIR')
-        hed = HEDdetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
+        if annot_dir and os.path.isdir(annot_dir):
+            hed = HEDdetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
+        else:
+            hed = HEDdetector.from_pretrained('lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = hed(im)
         return _save(out_im, os.path.join(out_dir, 'edge.png'))
@@ -39,7 +42,10 @@ def control_depth(user_image_path: str, out_dir: str) -> str:
     try:
         from controlnet_aux import ZoeDetector  # type: ignore
         annot_dir = os.environ.get('ANNOTATOR_DIR')
-        zoe = ZoeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
+        if annot_dir and os.path.isdir(annot_dir):
+            zoe = ZoeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
+        else:
+            zoe = ZoeDetector.from_pretrained('lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = zoe(im)
         return _save(out_im, os.path.join(out_dir, 'depth.png'))
@@ -72,7 +78,10 @@ def control_normals(user_image_path: str, out_dir: str) -> str:
     try:
         from controlnet_aux import NormalBaeDetector  # type: ignore
         annot_dir = os.environ.get('ANNOTATOR_DIR')
-        nb = NormalBaeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
+        if annot_dir and os.path.isdir(annot_dir):
+            nb = NormalBaeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
+        else:
+            nb = NormalBaeDetector.from_pretrained('lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = nb(im)
         return _save(out_im, os.path.join(out_dir, 'normal.png'))
@@ -85,7 +94,10 @@ def control_pose(user_image_path: str, keypoints_path: Optional[str], out_dir: s
     try:
         from controlnet_aux import OpenposeDetector  # type: ignore
         annot_dir = os.environ.get('ANNOTATOR_DIR')
-        op = OpenposeDetector.from_pretrained(annot_dir or 'lllyasviel/Annotators')
+        if annot_dir and os.path.isdir(annot_dir):
+            op = OpenposeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
+        else:
+            op = OpenposeDetector.from_pretrained('lllyasviel/Annotators')
         im = Image.open(user_image_path).convert('RGB')
         out_im = op(im)
         return _save(out_im, os.path.join(out_dir, 'pose.png'))
