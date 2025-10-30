@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 from skimage.metrics import structural_similarity as ssim
+import os as _os
 
 _torch_ready = False
 _lpips_ready = False
@@ -56,7 +57,10 @@ def _hist_corr(a: Image.Image, b: Image.Image) -> float:
 def _ssim(a: Image.Image, b: Image.Image) -> float:
     a_g = ImageOps.grayscale(a)
     b_g = ImageOps.grayscale(b)
-    return float(ssim(np.asarray(a_g, dtype=np.float32), np.asarray(b_g, dtype=np.float32)))
+    a_arr = np.asarray(a_g, dtype=np.float32)
+    b_arr = np.asarray(b_g, dtype=np.float32)
+    # skimage requires data_range for floating dtypes; our range is 0..255
+    return float(ssim(a_arr, b_arr, data_range=255.0))
 
 
 def _lpips_distance(a: Image.Image, b: Image.Image) -> Optional[float]:
@@ -81,44 +85,47 @@ def _lpips_distance(a: Image.Image, b: Image.Image) -> Optional[float]:
 
 
 def _clip_similarity(a: Image.Image, b: Image.Image) -> Optional[float]:
-    # Try open-clip; fallback to ResNet50 embeddings cosine similarity
-    try:
-        import open_clip  # type: ignore
-        import torch
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k', device=device)
-        def emb(img):
-            with torch.no_grad():
-                t = preprocess(img).unsqueeze(0).to(device)
-                feats = model.encode_image(t)
-                feats = feats / feats.norm(dim=-1, keepdim=True)
-                return feats.squeeze(0).cpu().numpy()
-        va = emb(a); vb = emb(b)
-        num = float((va * vb).sum()); den = float(np.linalg.norm(va) * np.linalg.norm(vb) + 1e-8)
-        return num / den
-    except Exception:
-        if not _torch_ready:
-            return None
-        import torch
-        import torchvision.models as models
-        from torchvision import transforms
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT).to(device)
-        resnet.eval()
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-        def emb(img):
-            with torch.no_grad():
-                t = preprocess(img).unsqueeze(0).to(device)
-                feats = resnet.forward(t)
-                feats = feats / torch.norm(feats, dim=-1, keepdim=True)
-                return feats.squeeze(0).cpu().numpy()
-        va = emb(a); vb = emb(b)
-        num = float((va * vb).sum()); den = float(np.linalg.norm(va) * np.linalg.norm(vb) + 1e-8)
-        return num / den
+    # Try open-clip if online; otherwise or on failure, fallback to ResNet50 embeddings cosine similarity.
+    offline = _os.environ.get('HF_HUB_OFFLINE', '0') == '1' or _os.environ.get('TRANSFORMERS_OFFLINE', '0') == '1'
+    if not offline:
+        try:
+            import open_clip  # type: ignore
+            import torch
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k', device=device)
+            def emb(img):
+                with torch.no_grad():
+                    t = preprocess(img).unsqueeze(0).to(device)
+                    feats = model.encode_image(t)
+                    feats = feats / feats.norm(dim=-1, keepdim=True)
+                    return feats.squeeze(0).cpu().numpy()
+            va = emb(a); vb = emb(b)
+            num = float((va * vb).sum()); den = float(np.linalg.norm(va) * np.linalg.norm(vb) + 1e-8)
+            return num / den
+        except Exception:
+            pass
+    if not _torch_ready:
+        return None
+    import torch
+    import torchvision.models as models
+    from torchvision import transforms
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT).to(device)
+    resnet.eval()
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    def emb(img):
+        with torch.no_grad():
+            t = preprocess(img).unsqueeze(0).to(device)
+            feats = resnet.forward(t)
+            feats = feats / torch.norm(feats, dim=-1, keepdim=True)
+            return feats.squeeze(0).cpu().numpy()
+    va = emb(a); vb = emb(b)
+    num = float((va * vb).sum()); den = float(np.linalg.norm(va) * np.linalg.norm(vb) + 1e-8)
+    return num / den
 
 
 @dataclass

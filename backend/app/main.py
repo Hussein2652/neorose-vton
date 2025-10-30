@@ -557,6 +557,8 @@ def health_models() -> dict:
         os.path.join(lama_root, "big-lama.ckpt"),
         os.path.join(lama_root, "unpacked", "big-lama", "big-lama.pt"),
         os.path.join(lama_root, "unpacked", "big-lama", "best.ckpt"),
+        os.path.join(lama_root, "unpacked", "big-lama", "models", "best.ckpt"),
+        os.path.join(lama_root, "unpacked", "big-lama", "models", "big-lama.pt"),
     ]
 
     # Licensed geometry models (manual ingestion)
@@ -591,6 +593,24 @@ def health_models() -> dict:
         ex = os.path.isfile(p)
         lama_exists_flags.append(ex)
         required.append({"path": p, "type": 'file', "exists": ex})
+    # As a fallback, scan the bind-mounted folder for any LaMa weight file
+    # to better support different zip layouts (e.g., big-lama/models/best.ckpt)
+    if not any(lama_exists_flags):
+        found_path = None
+        try:
+            for root, _dirs, files in os.walk(lama_root):
+                for fn in files:
+                    fnl = fn.lower()
+                    if fnl in {"big-lama.pt", "big-lama.ckpt", "best.ckpt", "lama.ckpt"}:
+                        found_path = os.path.join(root, fn)
+                        break
+                if found_path:
+                    break
+        except Exception:
+            found_path = None
+        if found_path:
+            required.append({"path": found_path, "type": 'file', "exists": True})
+            lama_exists_flags.append(True)
 
     mandatory_ok = all(exists_map.values())
     lama_ok = any(lama_exists_flags)
