@@ -321,7 +321,8 @@ def ingest_manual_assets(manual_dir: str) -> dict:
                 srcp = os.path.join(pixie_src, fname)
                 if os.path.isfile(srcp):
                     if fname.lower().endswith(".tar"):
-                        with tarfile.open(srcp, "r:") as tf:
+                        # Use auto-detect mode to handle various tar formats
+                        with tarfile.open(srcp, "r:*") as tf:
                             tf.extractall(pixie_dst)
                         report["actions"].append({"untarred": [srcp, pixie_dst]})
                     elif fname.lower().endswith(".zip"):
