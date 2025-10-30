@@ -15,7 +15,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     omegaconf opencv-python-headless albumentations==1.3.1 \
     einops tqdm matplotlib scipy python-multipart \
     transformers safetensors \
-    pytorch-lightning==1.9.5 torchmetrics==0.11.4 typing-extensions
+    pytorch-lightning==1.9.5 torchmetrics==0.11.4 typing-extensions \
+    diffusers accelerate
 
 COPY vton_service/server.py /app/server.py
 

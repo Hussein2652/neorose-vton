@@ -97,3 +97,5 @@ hf_models:
   - h94/IP-Adapter-FaceID
   # TripoSR snapshot (coarse clothed human mesh)
   - stabilityai/TripoSR
+  # CLIP vision model used by StableVITON embedder (to support strict offline)
+  - openai/clip-vit-large-patch14
