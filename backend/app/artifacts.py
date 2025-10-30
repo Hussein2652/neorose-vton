@@ -353,6 +353,44 @@ def ingest_manual_assets(manual_dir: str) -> dict:
                                     pass
                                 break
                         report["actions"].append({"unzipped": [srcp, lama_dst]})
+
+        # SCHP code/weights (optional)
+        schp_src = None
+        for name in ("schp", "SCHP", "schp_downloads"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                schp_src = cand
+                break
+        if schp_src:
+            tp_dst = os.path.join("third_party", "schp")
+            os.makedirs(tp_dst, exist_ok=True)
+            _copytree(schp_src, tp_dst)
+            report["actions"].append({"third_party": [schp_src, tp_dst]})
+
+        # StableVITON code/weights (optional)
+        stv_src = None
+        for name in ("stableviton", "StableVITON", "stable_viton"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                stv_src = cand
+                break
+        if stv_src:
+            stv_tp = os.path.join("third_party", "stableviton")
+            os.makedirs(stv_tp, exist_ok=True)
+            _copytree(stv_src, stv_tp)
+            report["actions"].append({"third_party": [stv_src, stv_tp]})
+        # Optional weights drop for StableVITON under manual_downloads/stableviton_weights or zip
+        stv_w_src = None
+        for name in ("stableviton_weights", "stable_viton_weights"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                stv_w_src = cand
+                break
+        if stv_w_src:
+            stv_w_dst = os.path.join(MODELS_DIR, "stableviton", "weights")
+            os.makedirs(stv_w_dst, exist_ok=True)
+            _copytree(stv_w_src, stv_w_dst)
+            report["actions"].append({"weights": [stv_w_src, stv_w_dst]})
     except Exception as e:  # pragma: no cover
         report["error"] = str(e)
     return report

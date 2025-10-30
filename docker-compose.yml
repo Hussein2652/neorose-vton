@@ -120,6 +120,7 @@ services:
       - S3_SECRET_ACCESS_KEY=minioadmin
       - S3_PREFIX=vfr/
       - RESULT_REDIRECT=1
+      - VTON_EXPERT_URL=http://vton_expert:9010
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -185,6 +186,19 @@ services:
       dockerfile: Dockerfile.remote
     ports:
       - "9002:9000"
+    restart: unless-stopped
+
+  vton_expert:
+    build:
+      context: .
+      dockerfile: Dockerfile.vton_stable
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "9010:9010"
+    volumes:
+      - ./third_party:/app/third_party:ro
+      - ./storage:/app/storage
     restart: unless-stopped
 
   prometheus:

@@ -2,6 +2,7 @@ from PIL import Image
 import os
 from typing import Optional
 from .person_parsing_mediapipe import segment_person_mediapipe
+from providers.segmentation_schp import SCHPSegmenter
 
 def _grabcut_mask(user_image_path: str) -> Image.Image | None:
     try:
@@ -37,6 +38,25 @@ def segment_person(user_image_path: str, out_dir: str) -> str:
     """
     os.makedirs(out_dir, exist_ok=True)
     im = Image.open(user_image_path).convert("RGB")
+    # Try SCHP first if repo/weights are present
+    try:
+        if os.path.isdir(os.path.join("third_party", "schp")) and os.path.exists(
+            os.environ.get(
+                "SCHP_MODEL_PATH",
+                os.path.join(
+                    os.environ.get("MODELS_DIR", "storage/models"),
+                    "schp_lip",
+                    "20190826",
+                    "exp-schp-201908261155-lip.pth",
+                ),
+            )
+        ):
+            schp = SCHPSegmenter()
+            m = schp.process(user_image_path, out_dir)
+            if m and os.path.exists(m):
+                return m
+    except Exception:
+        pass
     mask_path: Optional[str] = segment_person_mediapipe(user_image_path, out_dir)
     if not mask_path:
         mask_img = _grabcut_mask(user_image_path) or Image.new("L", im.size, color=255)

@@ -176,11 +176,14 @@ class VFRPipeline:
             keypoints_path=user_can.keypoints_path,
         )
         # Optional VTON expert blend
-        if self.cfg.get("vton_enabled", True):
-            vton_dir = os.path.join(work_root, "vton")
-            vton_path = self.vton.process(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
-            soft_input = vton_path
-        else:
+        soft_input = warped_garment_path
+        try:
+            if self.cfg.get("vton_enabled", True):
+                vton_dir = os.path.join(work_root, "vton")
+                vton_path = self.vton.process(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
+                if vton_path and os.path.exists(vton_path):
+                    soft_input = vton_path
+        except Exception:
             soft_input = warped_garment_path
         draped = DrapedOutput(soft_render_path=soft_input)
 
