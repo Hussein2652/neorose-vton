@@ -10,7 +10,7 @@ class LocalVTON:
         # Try expert StableVITON if available
         try:
             client = StableVITONClient()
-            res = client.process(user_image_path, warped_garment_path, out_dir)
+            res = client.process(user_image_path, warped_garment_path, out_dir, user_mask_path=mask_path)
             if res:
                 return res
         except Exception:

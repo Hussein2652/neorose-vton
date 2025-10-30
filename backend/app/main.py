@@ -524,8 +524,9 @@ def _startup():
                 ingest_manual_assets(manual_dir)
             # Also prefetch HF models if configured
             if os.environ.get("PREFETCH_HF_MODELS", "0") == "1":
-                try:
+            try:
                     from huggingface_hub import snapshot_download  # type: ignore
+                    from .artifacts import FileLock  # type: ignore
                     # SDXL base/refiner + common controlnets + SDXL turbo + Flux
                     ids = []
                     for mid in (mcfg.get('hf_models') or []):
@@ -539,7 +540,9 @@ def _startup():
                         try:
                             local_dir = os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', san(mid))
                             os.makedirs(local_dir, exist_ok=True)
-                            snapshot_download(repo_id=mid, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
+                            # Prevent duplicate concurrent snapshotting across services
+                            with FileLock(f"hf_snapshot_{san(mid)}", timeout=36000):
+                                snapshot_download(repo_id=mid, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
                         except Exception:
                             pass
                 except Exception:

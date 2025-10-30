@@ -36,7 +36,7 @@ io_contracts:
 
 vton:
   enabled: true
-  provider: local  # local | stableviton | remote
+  provider: stableviton  # local | stableviton | remote
 
 providers:
   segmentation: local  # local | torchvision | remote
