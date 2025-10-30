@@ -2,11 +2,10 @@
 FROM python:3.10-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_PREFER_BINARY=1
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+# Avoid apt to prevent flaky mirror errors; use headless wheels instead
 
 # Install PyTorch (CUDA 12.4 wheels) + deps needed by StableVITON inference
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -14,7 +13,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     torch torchvision && \
     pip install fastapi uvicorn[standard] Pillow requests \
     omegaconf opencv-python-headless albumentations==1.3.1 \
-    einops tqdm matplotlib scipy
+    einops tqdm matplotlib scipy python-multipart \
+    transformers safetensors \
+    pytorch-lightning==1.9.5 torchmetrics==0.11.4 typing-extensions
 
 COPY vton_service/server.py /app/server.py
 

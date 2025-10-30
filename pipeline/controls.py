@@ -4,6 +4,7 @@ import os
 from typing import Optional, Dict
 
 from PIL import Image
+import torch
 
 
 def _save(im: Image.Image, path: str) -> str:
@@ -21,6 +22,13 @@ def control_edges(user_image_path: str, out_dir: str) -> str:
             hed = HEDdetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
         else:
             hed = HEDdetector.from_pretrained('lllyasviel/Annotators')
+        # Prefer GPU for annotators if available
+        try:
+            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if hasattr(hed, 'to'):
+                hed.to(dev)
+        except Exception:
+            pass
         im = Image.open(user_image_path).convert('RGB')
         out_im = hed(im)
         return _save(out_im, os.path.join(out_dir, 'edge.png'))
@@ -46,19 +54,25 @@ def control_depth(user_image_path: str, out_dir: str) -> str:
             zoe = ZoeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
         else:
             zoe = ZoeDetector.from_pretrained('lllyasviel/Annotators')
+        try:
+            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if hasattr(zoe, 'to'):
+                zoe.to(dev)
+        except Exception:
+            pass
         im = Image.open(user_image_path).convert('RGB')
         out_im = zoe(im)
         return _save(out_im, os.path.join(out_dir, 'depth.png'))
     except Exception:
         try:
-            import torch  # type: ignore
             midas = torch.hub.load('intel-isl/MiDaS', 'DPT_Large')
-            midas.eval()
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            midas.to(device).eval()
             transforms = torch.hub.load('intel-isl/MiDaS', 'transforms')
             transform = transforms.dpt_transform
             im = Image.open(user_image_path).convert('RGB')
             import numpy as np
-            inp = transform(np.array(im))
+            inp = transform(np.array(im)).to(device)
             with torch.no_grad():
                 pred = midas(inp)
                 pred = torch.nn.functional.interpolate(
@@ -82,6 +96,12 @@ def control_normals(user_image_path: str, out_dir: str) -> str:
             nb = NormalBaeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
         else:
             nb = NormalBaeDetector.from_pretrained('lllyasviel/Annotators')
+        try:
+            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if hasattr(nb, 'to'):
+                nb.to(dev)
+        except Exception:
+            pass
         im = Image.open(user_image_path).convert('RGB')
         out_im = nb(im)
         return _save(out_im, os.path.join(out_dir, 'normal.png'))
@@ -98,6 +118,12 @@ def control_pose(user_image_path: str, keypoints_path: Optional[str], out_dir: s
             op = OpenposeDetector.from_pretrained(annotator_path=annot_dir, cache_dir=annot_dir, local_files_only=True)
         else:
             op = OpenposeDetector.from_pretrained('lllyasviel/Annotators')
+        try:
+            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if hasattr(op, 'to'):
+                op.to(dev)
+        except Exception:
+            pass
         im = Image.open(user_image_path).convert('RGB')
         out_im = op(im)
         return _save(out_im, os.path.join(out_dir, 'pose.png'))

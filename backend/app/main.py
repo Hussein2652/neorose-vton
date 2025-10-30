@@ -524,7 +524,7 @@ def _startup():
                 ingest_manual_assets(manual_dir)
             # Also prefetch HF models if configured
             if os.environ.get("PREFETCH_HF_MODELS", "0") == "1":
-            try:
+                try:
                     from huggingface_hub import snapshot_download  # type: ignore
                     from .artifacts import FileLock  # type: ignore
                     # SDXL base/refiner + common controlnets + SDXL turbo + Flux

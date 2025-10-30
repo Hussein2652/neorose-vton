@@ -31,8 +31,11 @@ class YOLOv8PoseExtractor:
             return out_path
         try:
             from ultralytics import YOLO  # type: ignore
+            import torch  # type: ignore
             model = YOLO(self.model_name)
-            res = model(user_image_path)
+            # Force GPU if available
+            device = 0 if torch.cuda.is_available() else 'cpu'
+            res = model(user_image_path, device=device)
             # Take first result
             r0 = res[0]
             w, h = r0.orig_shape[1], r0.orig_shape[0]
@@ -51,4 +54,3 @@ class YOLOv8PoseExtractor:
             with open(out_path, "w", encoding="utf-8") as f:
                 json.dump({"width": 0, "height": 0, "keypoints": []}, f)
             return out_path
-

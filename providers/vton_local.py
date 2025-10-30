@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import os
 from pipeline.vton_expert import apply_vton
 from .vton_stable import StableVITONClient
 
@@ -14,6 +15,8 @@ class LocalVTON:
             if res:
                 return res
         except Exception:
+            if os.environ.get("VTON_EXPERT_REQUIRED", "0") == "1":
+                raise
             pass
         # Fallback to local basic compositor
         return apply_vton(user_image_path, warped_garment_path, mask_path, out_dir)
