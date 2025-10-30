@@ -1,0 +1,41 @@
+# Ignore heavy runtime and cache folders (mounted as volumes at runtime)
+storage/
+manual_downloads/
+third_party/
+
+# Git and editor files
+.git/
+.gitignore
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+
+# Node/Frontend caches
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# Large artifacts by extension (weights, archives)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.zip
+*.tar
+*.tar.gz
+*.npz
+
