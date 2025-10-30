@@ -2,10 +2,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn[standard] Pillow
+RUN pip install --no-cache-dir fastapi uvicorn[standard] Pillow python-multipart
 
 COPY remote/ remote/
 
 EXPOSE 9000
 CMD ["uvicorn", "remote.server:app", "--host", "0.0.0.0", "--port", "9000"]
-
