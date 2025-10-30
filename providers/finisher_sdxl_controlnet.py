@@ -44,6 +44,7 @@ class SDXLControlNetFinisher:
                 StableDiffusionXLControlNetImg2ImgPipeline,
                 StableDiffusionXLImg2ImgPipeline,
             )  # type: ignore
+            from typing import Any
 
             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -91,6 +92,22 @@ class SDXLControlNetFinisher:
             if torch.cuda.is_available():
                 self._pipe = self._pipe.to(device)
 
+            # Optional: Load IP-Adapter (image) for garment/detail conditioning
+            # Prefer local snapshot dir for h94/IP-Adapter SDXL weights
+            try:
+                ip_dir = os.environ.get("IP_ADAPTER_SDXL_DIR", os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', 'h94-IP-Adapter', 'sdxl_models'))
+                ip_weights = os.environ.get("IP_ADAPTER_SDXL_WEIGHTS_NAME", "ip-adapter_sdxl.safetensors")
+                weight_path = os.path.join(ip_dir, ip_weights)
+                if os.path.exists(weight_path) and hasattr(self._pipe, 'load_ip_adapter'):
+                    # Newer diffusers API
+                    self._pipe.load_ip_adapter(ip_dir, weight_name=ip_weights)
+                    # Safety: set default scale from env later during call
+                    self._has_ip_adapter = True  # type: ignore[attr-defined]
+                else:
+                    self._has_ip_adapter = False  # type: ignore[attr-defined]
+            except Exception:
+                self._has_ip_adapter = False  # type: ignore[attr-defined]
+
             # Load refiner from single safetensors if provided
             try:
                 if self.refiner_path and os.path.exists(self.refiner_path):
@@ -119,6 +136,15 @@ class SDXLControlNetFinisher:
             image.save(out)
             return out
         try:
+            ip_adapter_image = None
+            if adapters:
+                # Prefer garment image for detail conditioning
+                g_path = adapters.get('garment_image') or adapters.get('garment')
+                if g_path and os.path.exists(g_path):
+                    try:
+                        ip_adapter_image = Image.open(g_path).convert('RGB')
+                    except Exception:
+                        ip_adapter_image = None
             # Build list of control images aligned with loaded ControlNets order
             control_images: List[Image.Image] = []
             cn_map_keys = [
@@ -131,11 +157,24 @@ class SDXLControlNetFinisher:
             if controls is None:
                 controls = {}
             # Attempt to map control images to cns by basic name matching
+            control_scales: List[float] = []
             for cn_id in self.cn_ids:
                 sel: Optional[Image.Image] = None
                 lid = cn_id.lower()
+                scale_val = float(os.environ.get("CTRL_DEFAULT", "0.6"))
                 for cname, keys in cn_map_keys:
                     if cname in lid:
+                        # Map per-control default scales
+                        if cname == 'openpose':
+                            scale_val = float(os.environ.get('CTRL_POSE', '0.9'))
+                        elif cname == 'depth':
+                            scale_val = float(os.environ.get('CTRL_DEPTH', '0.6'))
+                        elif cname == 'normal':
+                            scale_val = float(os.environ.get('CTRL_NORMAL', '0.5'))
+                        elif cname == 'seg':
+                            scale_val = float(os.environ.get('CTRL_SEG', '0.35'))
+                        elif cname == 'canny':
+                            scale_val = float(os.environ.get('CTRL_EDGE', '0.4'))
                         for k in keys:
                             p = controls.get(k)
                             if p and os.path.exists(p):
@@ -145,10 +184,11 @@ class SDXLControlNetFinisher:
                         break
                 # fallback: just feed the base image if no mapped control
                 control_images.append(sel if sel is not None else image)
+                control_scales.append(scale_val)
 
             # Run controlnet img2img
             strength = max(0.05, min(0.95, float(denoise)))
-            result = self._pipe(
+            call_kwargs: dict = dict(
                 prompt=prompt,
                 negative_prompt=negative,
                 image=image,
@@ -156,7 +196,19 @@ class SDXLControlNetFinisher:
                 strength=strength,
                 num_inference_steps=int(os.environ.get("SDXL_STEPS", "30")),
                 guidance_scale=float(os.environ.get("SDXL_GUIDANCE", "6.0")),
-            ).images[0]
+            )
+            if control_images:
+                call_kwargs["controlnet_conditioning_scale"] = control_scales
+            # If IP-Adapter is loaded and we have a garment image, pass it
+            try:
+                if getattr(self, '_has_ip_adapter', False) and ip_adapter_image is not None:
+                    call_kwargs['ip_adapter_image'] = ip_adapter_image
+                    scale = float(os.environ.get('IP_ADAPTER_GARMENT_SCALE', '1.0'))
+                    if hasattr(self._pipe, 'set_ip_adapter_scale'):
+                        self._pipe.set_ip_adapter_scale(scale)
+            except Exception:
+                pass
+            result = self._pipe(**call_kwargs).images[0]
             # Optional refiner pass
             if self._refiner is not None:
                 ref_strength = float(os.environ.get("SDXL_REFINER_STRENGTH", "0.15"))

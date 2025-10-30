@@ -9,3 +9,4 @@ ultralytics
 realesrgan
 huggingface-hub
 controlnet-aux
+mediapipe

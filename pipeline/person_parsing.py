@@ -1,5 +1,7 @@
 from PIL import Image
 import os
+from typing import Optional
+from .person_parsing_mediapipe import segment_person_mediapipe
 
 def _grabcut_mask(user_image_path: str) -> Image.Image | None:
     try:
@@ -28,11 +30,16 @@ def _grabcut_mask(user_image_path: str) -> Image.Image | None:
 
 def segment_person(user_image_path: str, out_dir: str) -> str:
     """
-    Person segmentation using OpenCV GrabCut when available; otherwise full-white mask.
+    Person segmentation (Tier-S path prefers accurate masks):
+    1) Try MediaPipe selfie segmentation (fast, good for portrait)
+    2) Fallback to OpenCV GrabCut
+    3) Fallback to full-white mask
     """
     os.makedirs(out_dir, exist_ok=True)
     im = Image.open(user_image_path).convert("RGB")
-    mask = _grabcut_mask(user_image_path) or Image.new("L", im.size, color=255)
-    mask_path = os.path.join(out_dir, "user_mask.png")
-    mask.save(mask_path)
+    mask_path: Optional[str] = segment_person_mediapipe(user_image_path, out_dir)
+    if not mask_path:
+        mask_img = _grabcut_mask(user_image_path) or Image.new("L", im.size, color=255)
+        mask_path = os.path.join(out_dir, "user_mask.png")
+        mask_img.save(mask_path)
     return mask_path

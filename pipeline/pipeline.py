@@ -201,7 +201,16 @@ class VFRPipeline:
         last_scores = None
         while attempts <= max_retries:
             fin_dir = os.path.join(work_root, f"finisher_try_{attempts}")
-            polished_path = self.finisher.process(draped.soft_render_path, fin_dir, denoise=denoise, controls=controls)
+            polished_path = self.finisher.process(
+                draped.soft_render_path,
+                fin_dir,
+                denoise=denoise,
+                controls=controls,
+                adapters={
+                    'garment_image': garment.garment_front_path,
+                    'face_image': user_can.user_image_path,
+                },
+            )
             post_dir = os.path.join(work_root, f"post_try_{attempts}")
             final_path = self.post.process(polished_path, post_dir)
             # Optional post chain
@@ -224,7 +233,15 @@ class VFRPipeline:
             if scores.get("passed"):
                 break
             attempts += 1
+            # Adjust finisher params for next try
             denoise = max(0.0, denoise + float(self.cfg["qa_thresholds"]["denoise_delta"]))
+            # Increase steps by configured increment for retries
+            try:
+                inc = int(self.cfg.get("qa_thresholds", {}).get("step_increase", 5))
+                cur_steps = int(os.environ.get("SDXL_STEPS", str(int(self.cfg.get("finisher_steps", 38)))))
+                os.environ["SDXL_STEPS"] = str(cur_steps + inc)
+            except Exception:
+                pass
 
         # Optional escalation to Kling after retries
         if (not last_scores or not last_scores.get("passed")) and self.cfg.get("escalate_on_fail"):

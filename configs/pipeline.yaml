@@ -8,11 +8,11 @@ finisher:
   backend: sdxl_controlnet  # local | kling | remote | sdxl | flux | sdxl_controlnet
   escalate_on_fail: true
   ctrl:
-    pose: 0.55
-    depth: 0.65
-    normal: 0.45
-    seg: 0.75
-    edge: 0.35
+    pose: 0.90
+    depth: 0.60
+    normal: 0.50
+    seg: 0.35
+    edge: 0.40
   adapters:
     garment: 1.00
     faceid: 0.85
@@ -36,10 +36,10 @@ io_contracts:
 
 vton:
   enabled: true
-  provider: stableviton  # local | stableviton | remote
+  provider: local  # local | stableviton | remote
 
 providers:
-  segmentation: torchvision  # local | torchvision | remote
+  segmentation: local  # local | torchvision | remote
   pose: yolov8  # mediapipe | yolov8 | remote
   geometry: smplx  # stub | smplx | remote
 

@@ -50,6 +50,9 @@ services:
       - SDXL_REFINER_PATH=/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors
       - CONTROLNET_UNION_SDXL_DIR=/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0
       - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
+      - IP_ADAPTER_SDXL_DIR=/app/storage/models/snapshots/h94-IP-Adapter/sdxl_models
+      - IP_ADAPTER_SDXL_WEIGHTS_NAME=ip-adapter_sdxl.safetensors
+      - IP_ADAPTER_GARMENT_SCALE=1.0
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       - MANUAL_MODELS_DIR=/app/manual_downloads
@@ -96,6 +99,9 @@ services:
       - SDXL_REFINER_PATH=/app/storage/models/sdxl_refiner/1.0/sd_xl_refiner_1.0.safetensors
       - CONTROLNET_UNION_SDXL_DIR=/app/storage/models/snapshots/xinsir-controlnet-union-sdxl-1.0
       - ANNOTATOR_DIR=/app/storage/models/snapshots/lllyasviel-Annotators
+      - IP_ADAPTER_SDXL_DIR=/app/storage/models/snapshots/h94-IP-Adapter/sdxl_models
+      - IP_ADAPTER_SDXL_WEIGHTS_NAME=ip-adapter_sdxl.safetensors
+      - IP_ADAPTER_GARMENT_SCALE=1.0
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       - MANUAL_MODELS_DIR=/app/manual_downloads
