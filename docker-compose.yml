@@ -146,9 +146,10 @@ services:
       - remote_worker
     healthcheck:
       test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n  r = urllib.request.urlopen('http://localhost:8000/health', timeout=2)\n  sys.exit(0 if r.status==200 else 1)\nexcept Exception:\n  sys.exit(1)\nPY"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 30
+      start_period: 90s
     volumes:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
