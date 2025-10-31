@@ -9,14 +9,28 @@ WORKDIR /app
 
 # Install PyTorch (CUDA 12.4 wheels) + deps needed by StableVITON inference
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --index-url https://download.pytorch.org/whl/cu124 \
-    torch torchvision && \
-    pip install fastapi uvicorn[standard] Pillow requests \
-    omegaconf opencv-python-headless albumentations==1.3.1 \
-    einops tqdm matplotlib scipy python-multipart \
-    transformers safetensors \
-    pytorch-lightning==1.9.5 torchmetrics==0.11.4 typing-extensions \
-    diffusers accelerate
+    pip install --upgrade pip && \
+    pip install --index-url https://download.pytorch.org/whl/cu117 \
+      torch==2.0.0+cu117 torchvision==0.15.1+cu117 torchaudio==2.0.1+cu117 && \
+    pip install \
+      fastapi uvicorn[standard] Pillow requests \
+      omegaconf \
+      opencv-python==4.7.0.72 \
+      albumentations \
+      einops \
+      matplotlib \
+      scipy==1.10.1 \
+      python-multipart \
+      transformers==4.33.2 \
+      xformers==0.0.19 \
+      triton==2.0.0 \
+      open-clip-torch==2.19.0 \
+      diffusers==0.20.2 accelerate \
+      huggingface_hub==0.20.2 \
+      safetensors \
+      typing-extensions \
+      timm \
+      numpy==1.24.4
 
 COPY vton_service/server.py /app/server.py
 

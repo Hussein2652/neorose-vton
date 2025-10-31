@@ -98,8 +98,8 @@ services:
       - LOCKS_DIR=/app/storage/locks
       - HF_HOME=/app/storage/models/hf
       - TORCH_HOME=/app/storage/models/torch
-      - PREFETCH_MODELS=1
-      - PREFETCH_HF_MODELS=1
+      - PREFETCH_MODELS=0
+      - PREFETCH_HF_MODELS=0
       - MODELS_CONFIG=/app/configs/models.yaml
       - YOLOV8_POSE_MODEL=/app/storage/models/yolo_v8_pose/v8x/yolov8x-pose.pt
       - REALESRGAN_WEIGHTS=/app/storage/models/realesrgan/x4plus/RealESRGAN_x4plus.pth

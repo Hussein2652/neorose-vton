@@ -19,6 +19,8 @@ from .billing import router as billing_router
 from .validators import enforce_max_upload_size
 from .artifacts import ensure_artifact, ArtifactSpec, ingest_manual_assets
 import yaml
+import threading
+import logging
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -488,69 +490,74 @@ def _startup():
     init_db()
     Jobs.ensure_worker()
 
-    # Prefetch models if configured
+    # Prefetch models if configured (run in background so startup is fast)
     try:
-        if os.environ.get("PREFETCH_MODELS", "0") == "1":
-            cfg_path = os.environ.get("MODELS_CONFIG", "configs/models.yaml")
-            if os.path.exists(cfg_path):
-                with open(cfg_path, 'r', encoding='utf-8') as f:
-                    mcfg = yaml.safe_load(f) or {}
-                for a in mcfg.get('artifacts', []) or []:
-                    spec = ArtifactSpec(
-                        name=a.get('name'),
-                        version=a.get('version'),
-                        sha256=a.get('sha256'),
-                        url=a.get('url'),
-                        s3_uri=a.get('s3_uri'),
-                        unpack=bool(a.get('unpack', False)),
-                    )
-                    local, _ = ensure_artifact(spec)
-                    # update registry info
-                    try:
-                        from .db import set_artifact_local
-                        size = 0
-                        if os.path.isdir(local):
-                            for root, _dirs, files in os.walk(local):
-                                for fn in files:
-                                    size += os.path.getsize(os.path.join(root, fn))
-                        else:
-                            size = os.path.getsize(local)
-                        set_artifact_local(spec.name, spec.version, local, size)
-                    except Exception:
-                        pass
-            # Ingest manual licensed assets (SMPL-X/PIXIE)
-            manual_dir = os.environ.get("MANUAL_MODELS_DIR", "manual_downloads")
-            if os.path.isdir(manual_dir):
-                ingest_manual_assets(manual_dir)
-            # Also prefetch HF models if configured
-            if os.environ.get("PREFETCH_HF_MODELS", "0") == "1":
+        do_prefetch = os.environ.get("PREFETCH_MODELS", "0") == "1"
+        do_hf = os.environ.get("PREFETCH_HF_MODELS", "0") == "1"
+        if do_prefetch or do_hf:
+            def _prefetch_worker() -> None:
                 try:
-                    from huggingface_hub import snapshot_download  # type: ignore
-                    from .artifacts import FileLock  # type: ignore
-                    # SDXL base/refiner + common controlnets + SDXL turbo + Flux
-                    ids = []
-                    for mid in (mcfg.get('hf_models') or []):
-                        if isinstance(mid, str) and mid:
-                            ids.append(mid)
-                    import re
-                    def san(s: str) -> str:
-                        return re.sub(r'[^a-zA-Z0-9_.-]+', '-', s)
-                    token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN') or os.environ.get('HUGGINGFACEHUB_API_TOKEN')
-                    for mid in ids:
+                    cfg_path = os.environ.get("MODELS_CONFIG", "configs/models.yaml")
+                    mcfg = {}
+                    if os.path.exists(cfg_path):
+                        with open(cfg_path, 'r', encoding='utf-8') as f:
+                            mcfg = yaml.safe_load(f) or {}
+                    if do_prefetch:
+                        for a in mcfg.get('artifacts', []) or []:
+                            spec = ArtifactSpec(
+                                name=a.get('name'),
+                                version=a.get('version'),
+                                sha256=a.get('sha256'),
+                                url=a.get('url'),
+                                s3_uri=a.get('s3_uri'),
+                                unpack=bool(a.get('unpack', False)),
+                            )
+                            local, _ = ensure_artifact(spec)
+                            try:
+                                from .db import set_artifact_local
+                                size = 0
+                                if os.path.isdir(local):
+                                    for root, _dirs, files in os.walk(local):
+                                        for fn in files:
+                                            size += os.path.getsize(os.path.join(root, fn))
+                                else:
+                                    size = os.path.getsize(local)
+                                set_artifact_local(spec.name, spec.version, local, size)
+                            except Exception:
+                                pass
+                        # Ingest manual licensed assets (SMPL-X/PIXIE)
+                        manual_dir = os.environ.get("MANUAL_MODELS_DIR", "manual_downloads")
+                        if os.path.isdir(manual_dir):
+                            ingest_manual_assets(manual_dir)
+                    if do_hf:
                         try:
-                            local_dir = os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', san(mid))
-                            os.makedirs(local_dir, exist_ok=True)
-                            # Prevent duplicate concurrent snapshotting across services
-                            with FileLock(f"hf_snapshot_{san(mid)}", timeout=36000):
-                                snapshot_download(repo_id=mid, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
+                            from huggingface_hub import snapshot_download  # type: ignore
+                            from .artifacts import FileLock  # type: ignore
+                            ids = []
+                            for mid in (mcfg.get('hf_models') or []):
+                                if isinstance(mid, str) and mid:
+                                    ids.append(mid)
+                            import re
+                            def san(s: str) -> str:
+                                return re.sub(r'[^a-zA-Z0-9_.-]+', '-', s)
+                            token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN') or os.environ.get('HUGGINGFACEHUB_API_TOKEN')
+                            for mid in ids:
+                                try:
+                                    local_dir = os.path.join(os.environ.get('MODELS_DIR', 'storage/models'), 'snapshots', san(mid))
+                                    os.makedirs(local_dir, exist_ok=True)
+                                    with FileLock(f"hf_snapshot_{san(mid)}", timeout=36000):
+                                        snapshot_download(repo_id=mid, token=token, local_files_only=False, local_dir=local_dir, local_dir_use_symlinks=False)
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.getLogger(__name__).warning(f"Background prefetch failed: {e}")
+
+            threading.Thread(target=_prefetch_worker, name="prefetch", daemon=True).start()
+            logging.getLogger(__name__).info("Kicked off background model prefetch")
     except Exception as e:
-        # Log but don't fail startup
-        import logging
-        logging.getLogger(__name__).warning(f"Prefetch models failed: {e}")
+        logging.getLogger(__name__).warning(f"Prefetch kickoff failed: {e}")
 
 
 @app.get("/v1/health/models")
