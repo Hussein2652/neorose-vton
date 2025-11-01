@@ -203,8 +203,8 @@ def main() -> None:
         err = (e.stderr or "") + "\n" + (e.stdout or "")
         if "out of memory" in err.lower():
             try:
-                # Only use multiples of 64 to keep U-Net skip shapes aligned
-                sizes = [(320, 256), (256, 192), (192, 128)]
+                # Only use multiples of 64 to keep U-Net skip shapes aligned and avoid 8x6 latent stage
+                sizes = [(320, 256), (256, 256), (192, 192)]
                 for h, w in sizes:
                     print(f"[infer_wrapper] Retrying with smaller size {h}x{w}", file=sys.stderr)
                     cmd2 = list(cmd)

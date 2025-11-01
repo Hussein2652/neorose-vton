@@ -81,8 +81,8 @@ services:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
       - ./third_party:/app/third_party
-    # Run worker on CPU to free GPU VRAM for expert
-    # gpus: ${GPU_REQUEST:-all}
+    # Re-enable GPU for worker so pipeline models run on CUDA
+    gpus: ${GPU_REQUEST:-all}
 
   api:
     build:
@@ -213,8 +213,9 @@ services:
       dockerfile: Dockerfile.vton_stable
     environment:
       - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0
       - STABLEVITON_WEIGHTS_DIR=/app/storage/models/stableviton/weights
-      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path /app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 256 --img_W 192 --save_dir {OUT} --unpair
+      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path /app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 320 --img_W 256 --save_dir {OUT} --unpair
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128,garbage_collection_threshold:0.9
       - XFORMERS_MEMORY_EFFICIENT_ATTENTION=1
       - HF_HOME=/app/storage/models/hf
