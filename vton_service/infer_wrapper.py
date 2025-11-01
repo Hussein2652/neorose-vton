@@ -51,6 +51,9 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
     replaced_cuda = False
     inserted_with = False
     pending_indent_for_xsamples = False
+    inserted_low_vram_before_get = False
+    inserted_low_vram_before_sample = False
+    inserted_low_vram_before_decode = False
 
     for i, line in enumerate(lines):
         # After DataLoader import, add autocast import
@@ -67,17 +70,31 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
             added_arg = True
             continue
 
-        # Replace model.cuda() with conditional half().cuda()
+        # Replace model.cuda() with no-op; we will shift modules selectively via low_vram_shift
         if (not replaced_cuda) and "model = model.cuda()" in line:
-            # Keep original dtype; rely on autocast to avoid input/weight dtype mismatch
-            out.append(line)
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}# Disabled full .cuda(); using low_vram_shift instead\n")
+            out.append(f"{indent}model = model\n")
             replaced_cuda = True
+            continue
+
+        # Insert low_vram_shift before get_input to ensure VAE on CUDA and UNet on CPU during encode
+        if (not inserted_low_vram_before_get) and "z, c = model.get_input(batch, params.first_stage_key)" in line:
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}# Low VRAM: VAE on CUDA, UNet on CPU for encode\n")
+            out.append(f"{indent}model.low_vram_shift(False)\n")
+            out.append(line)
+            inserted_low_vram_before_get = True
             continue
 
         # Wrap sampling + decode in autocast
         if not inserted_with and "samples, _, _ = sampler.sample(" in line:
             # Insert with autocast at the same indentation
             indent = line[: len(line) - len(line.lstrip())]
+            if not inserted_low_vram_before_sample:
+                out.append(f"{indent}# Low VRAM: UNet/Control on CUDA, VAE on CPU for sampling\n")
+                out.append(f"{indent}model.low_vram_shift(True)\n")
+                inserted_low_vram_before_sample = True
             out.append(f"{indent}with autocast(enabled=args.fp16, dtype=torch.float16 if args.fp16 else torch.float32):\n")
             out.append(f"{indent}    {line.lstrip()}")
             inserted_with = True
@@ -86,6 +103,10 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
 
         if pending_indent_for_xsamples and "x_samples = model.decode_first_stage(samples)" in line:
             indent = line[: len(line) - len(line.lstrip())]
+            if not inserted_low_vram_before_decode:
+                out.append(f"{indent}    # Low VRAM: VAE on CUDA for decode\n")
+                out.append(f"{indent}    model.low_vram_shift(False)\n")
+                inserted_low_vram_before_decode = True
             out.append(f"{indent}    {line.lstrip()}")
             pending_indent_for_xsamples = False
             continue
@@ -118,7 +139,14 @@ def main() -> None:
     args, unknown = ap.parse_known_args()
 
     # Clean checkpoint then call upstream inference.py
-    cleaned = _clean_ckpt(args.model_load_path)
+    # Prefer provided model path; if missing, fallback to STABLEVITON_WEIGHTS_DIR
+    model_path = args.model_load_path
+    if not os.path.exists(model_path):
+        alt_dir = os.environ.get("STABLEVITON_WEIGHTS_DIR", "")
+        alt_path = os.path.join(alt_dir, "VITONHD_PBE_pose.ckpt") if alt_dir else ""
+        if alt_path and os.path.exists(alt_path):
+            model_path = alt_path
+    cleaned = _clean_ckpt(model_path)
     # Patch upstream inference script for fp16 if requested via env
     upstream_path = "third_party/stableviton/StableVITON-master/inference.py"
     use_fp16 = os.environ.get("STABLEVITON_FORCE_FP16", "0") == "1"
@@ -164,6 +192,31 @@ def main() -> None:
             print("[infer_wrapper stdout]", e.stdout, file=sys.stderr)
         if e.stderr:
             print("[infer_wrapper stderr]", e.stderr, file=sys.stderr)
+        # Auto-retry with smaller resolution when CUDA runs out of memory
+        err = (e.stderr or "") + "\n" + (e.stdout or "")
+        if "out of memory" in err.lower():
+            try:
+                sizes = [(288, 216), (256, 192), (224, 168)]
+                for h, w in sizes:
+                    print(f"[infer_wrapper] Retrying with smaller size {h}x{w}", file=sys.stderr)
+                    cmd2 = list(cmd)
+                    for i, tok in enumerate(cmd2):
+                        if tok == "--img_H" and i + 1 < len(cmd2):
+                            cmd2[i+1] = str(h)
+                        if tok == "--img_W" and i + 1 < len(cmd2):
+                            cmd2[i+1] = str(w)
+                    r2 = subprocess.run(cmd2, check=True, capture_output=True, text=True, env=env)
+                    if verbose and r2.stdout:
+                        print(r2.stdout)
+                    if verbose and r2.stderr:
+                        print(r2.stderr, file=sys.stderr)
+                    return
+            except subprocess.CalledProcessError as e2:
+                print("[infer_wrapper] Retry failed", file=sys.stderr)
+                if e2.stdout:
+                    print("[infer_wrapper stdout]", e2.stdout, file=sys.stderr)
+                if e2.stderr:
+                    print("[infer_wrapper stderr]", e2.stderr, file=sys.stderr)
         raise
     finally:
         try:
