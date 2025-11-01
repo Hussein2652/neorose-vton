@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from typing import Optional, List
+import time
 from PIL import Image
 
 
@@ -50,7 +51,15 @@ class SDXLControlNetFinisher:
             # Cooperatively yield GPU to the VTON expert when reserved
             locks_dir = os.environ.get("LOCKS_DIR", os.path.join("storage", "locks"))
             gpu_lock_path = os.path.join(locks_dir, "gpu.lock")
-            use_cuda = torch.cuda.is_available() and (not os.path.exists(gpu_lock_path))
+            use_cuda = torch.cuda.is_available()
+            if os.path.exists(gpu_lock_path):
+                try:
+                    max_age = int(os.environ.get("GPU_LOCK_STALE_SEC", "1800"))
+                    st = os.stat(gpu_lock_path)
+                    if (time.time() - st.st_mtime) <= max_age:
+                        use_cuda = False
+                except Exception:
+                    use_cuda = False
             dtype = torch.float16 if use_cuda else torch.float32
             device = "cuda" if use_cuda else "cpu"
 

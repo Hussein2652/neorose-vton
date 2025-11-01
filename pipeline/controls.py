@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional, Dict
 
 from PIL import Image
@@ -11,6 +12,19 @@ def _save(im: Image.Image, path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     im.save(path)
     return path
+
+
+def _gpu_free() -> bool:
+    locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage', 'locks'))
+    p = os.path.join(locks_dir, 'gpu.lock')
+    try:
+        if not os.path.exists(p):
+            return True
+        max_age = int(os.environ.get('GPU_LOCK_STALE_SEC', '1800'))
+        st = os.stat(p)
+        return (time.time() - st.st_mtime) > max_age
+    except Exception:
+        return True
 
 
 def control_edges(user_image_path: str, out_dir: str) -> str:
@@ -24,9 +38,7 @@ def control_edges(user_image_path: str, out_dir: str) -> str:
             hed = HEDdetector.from_pretrained('lllyasviel/Annotators')
         # Prefer GPU for annotators if available
         try:
-            import os
-            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
-            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
+            use_cuda = torch.cuda.is_available() and _gpu_free()
             dev = 'cuda' if use_cuda else 'cpu'
             if hasattr(hed, 'to'):
                 hed.to(dev)
@@ -58,12 +70,9 @@ def control_depth(user_image_path: str, out_dir: str) -> str:
         else:
             zoe = ZoeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            import os
-            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
-            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
-            dev = 'cuda' if use_cuda else 'cpu'
+            use_cuda = torch.cuda.is_available() and _gpu_free()
             if hasattr(zoe, 'to'):
-                zoe.to(dev)
+                zoe.to('cuda' if use_cuda else 'cpu')
         except Exception:
             pass
         im = Image.open(user_image_path).convert('RGB')
@@ -103,12 +112,9 @@ def control_normals(user_image_path: str, out_dir: str) -> str:
         else:
             nb = NormalBaeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            import os
-            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
-            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
-            dev = 'cuda' if use_cuda else 'cpu'
+            use_cuda = torch.cuda.is_available() and _gpu_free()
             if hasattr(nb, 'to'):
-                nb.to(dev)
+                nb.to('cuda' if use_cuda else 'cpu')
         except Exception:
             pass
         im = Image.open(user_image_path).convert('RGB')
@@ -128,12 +134,9 @@ def control_pose(user_image_path: str, keypoints_path: Optional[str], out_dir: s
         else:
             op = OpenposeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            import os
-            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
-            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
-            dev = 'cuda' if use_cuda else 'cpu'
+            use_cuda = torch.cuda.is_available() and _gpu_free()
             if hasattr(op, 'to'):
-                op.to(dev)
+                op.to('cuda' if use_cuda else 'cpu')
         except Exception:
             pass
         im = Image.open(user_image_path).convert('RGB')
