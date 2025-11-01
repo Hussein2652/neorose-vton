@@ -273,14 +273,34 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                         return None
                     # else continue to fallback below
                 # Find result image in save_dir (pair or unpair)
-                cand = None
-                for sub in ('pair', 'unpair', ''):
-                    p = os.path.join(o, sub)
-                    if os.path.isdir(p):
-                        for fn in os.listdir(p):
-                            if fn.lower().endswith(('.jpg', '.png')):
-                                cand = os.path.join(p, fn)
-                                break
+                def _find_out(save_root: str) -> Optional[str]:
+                    for sub in ('pair', 'unpair', ''):
+                        pth = os.path.join(save_root, sub)
+                        if os.path.isdir(pth):
+                            for fn in os.listdir(pth):
+                                if fn.lower().endswith(('.jpg', '.png')):
+                                    return os.path.join(pth, fn)
+                    return None
+                cand = _find_out(o)
+                if not cand:
+                    # Retry with smaller safe sizes if nothing produced
+                    for (hh, ww) in [(512, 384), (320, 256)]:
+                        cmd2 = list(cmd)
+                        for i, tok in enumerate(cmd2):
+                            if tok == '--img_H' and i + 1 < len(cmd2):
+                                cmd2[i+1] = str(hh)
+                            if tok == '--img_W' and i + 1 < len(cmd2):
+                                cmd2[i+1] = str(ww)
+                        try:
+                            r2 = subprocess.run(cmd2, check=True, capture_output=True, text=True)
+                            if os.environ.get('STABLEVITON_VERBOSE') == '1':
+                                print('[StableVITON CLI stdout retry]', r2.stdout)
+                                print('[StableVITON CLI stderr retry]', r2.stderr)
+                        except subprocess.CalledProcessError as e2:
+                            if os.environ.get('STABLEVITON_VERBOSE') == '1':
+                                print('[StableVITON CLI retry failed]', e2, file=sys.stderr)
+                            continue
+                        cand = _find_out(o)
                         if cand:
                             break
                 if cand and os.path.exists(cand):

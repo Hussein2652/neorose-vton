@@ -247,6 +247,8 @@ services:
       - STABLEVITON_DEBUG=1
       - STV_MAX_H=640
       - STV_MAX_W=512
+      - DENSEPOSE_CFG=${DENSEPOSE_CFG:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.yaml}
+      - DENSEPOSE_WEIGHTS=${DENSEPOSE_WEIGHTS:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.pkl}
     ports:
       - "9010:9010"
     volumes:

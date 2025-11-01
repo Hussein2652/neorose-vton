@@ -24,12 +24,17 @@ def compute_densepose_image(user_im: Image.Image) -> Image.Image:
     except Exception as e:  # noqa: BLE001
         raise ImportError("densepose not available") from e
 
-    # Minimal DensePose config (use default model if available in cache)
+    # Require config & weights from env for deterministic setup
+    import os  # type: ignore
+    cfg_file = os.environ.get("DENSEPOSE_CFG")
+    weights_path = os.environ.get("DENSEPOSE_WEIGHTS")
+    if not cfg_file or not weights_path or (not os.path.exists(weights_path)):
+        raise ImportError("densepose config/weights not provided")
     cfg = get_cfg()
     add_densepose_config(cfg)
-    cfg.merge_from_file(cfg.DENSEPOSE_CONFIG_FILE if hasattr(cfg, "DENSEPOSE_CONFIG_FILE") else "")
-    # Use a commonly available model id if present; otherwise rely on env/preload
-    # Users should bake a detectron2+densepose model into the container for this path.
+    cfg.merge_from_file(cfg_file)
+    cfg.MODEL.WEIGHTS = weights_path
+    # Users should bake detectron2+densepose model into the container for this path.
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     predictor = DefaultPredictor(cfg)
 
@@ -50,4 +55,3 @@ def compute_densepose_image(user_im: Image.Image) -> Image.Image:
     dp = extractor(outputs)
     out = comp_vis.visualize(img, dp)
     return Image.fromarray(out[:, :, ::-1])
-

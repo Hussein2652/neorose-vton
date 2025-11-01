@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Minimal system libs for OpenCV (cv2) used by StableVITON CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libgl1 libglib2.0-0 \
+      libgl1 libglib2.0-0 git gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Avoid apt to prevent flaky mirror errors; use headless wheels instead
@@ -40,6 +40,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
       typing-extensions \
       timm \
       numpy==1.24.4
+
+# Optional: Detectron2 + DensePose (CUDA 11.7, Torch 2.0 wheels)
+# If the wheel index is unavailable at build time, this step will be skipped silently.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    (pip install --no-cache-dir -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu117/torch2.0/index.html detectron2==0.6 pycocotools fvcore iopath || true) && \
+    (pip install --no-cache-dir git+https://github.com/facebookresearch/DensePose.git || true)
 
 COPY vton_service/server.py /app/server.py
 COPY vton_service/infer_wrapper.py /app/infer_wrapper.py
