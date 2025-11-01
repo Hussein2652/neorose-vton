@@ -74,7 +74,7 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
     # Cloth image saved as PNG
     _save_image(garment_im, os.path.join(d_cloth, cloth_name), mode='RGBA')
 
-    # Cloth mask from alpha if present, else Otsu on luminance (pure PIL/NumPy)
+    # Cloth mask from alpha if present, else Otsu on luminance; refine morphologically
     gar_rgba = garment_im.convert('RGBA')
     gar_np = np.array(gar_rgba)
     alpha = gar_np[:, :, 3].astype(np.uint8)
@@ -93,6 +93,14 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
         cmask = (gray >= t).astype(np.uint8) * 255
     else:
         cmask = alpha
+    try:
+        import cv2
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        cm = cv2.morphologyEx(cmask, cv2.MORPH_CLOSE, k, iterations=1)
+        cm = cv2.morphologyEx(cm, cv2.MORPH_OPEN, k, iterations=1)
+        cmask = cm
+    except Exception:
+        pass
     Image.fromarray(cmask).save(os.path.join(d_cmask, cloth_name))
 
     # Person mask: use provided mask, else SCHP if available, else full white
@@ -191,6 +199,20 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
     pairs = os.path.join(root, 'test_pairs.txt')
     with open(pairs, 'w', encoding='utf-8') as f:
         f.write(f"{im_name} {cloth_name}\n")
+    # Optional: copy debug dataset to storage for inspection
+    if os.environ.get('STABLEVITON_DEBUG') == '1':
+        try:
+            dbg_root = os.path.join('/app/storage', 'debug', os.path.basename(root))
+            os.makedirs(dbg_root, exist_ok=True)
+            import shutil
+            for d in (test, os.path.dirname(pairs)):
+                dd = os.path.join(dbg_root, os.path.basename(d))
+                if os.path.isdir(d):
+                    shutil.copytree(d, dd, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(d, dbg_root)
+        except Exception:
+            pass
     return root, im_name, cloth_name
 
 
