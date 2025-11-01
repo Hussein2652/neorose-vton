@@ -82,7 +82,8 @@ services:
       - S3_ACCESS_KEY_ID=minioadmin
       - S3_SECRET_ACCESS_KEY=minioadmin
       - S3_PREFIX=vfr/
-      - CUDA_VISIBLE_DEVICES=
+      # Prefer GPU for finisher if available; leave empty to let runtime decide
+      - CUDA_VISIBLE_DEVICES=${CELERY_CUDA_VISIBLE_DEVICES:-}
     depends_on:
       - redis
       - postgres
@@ -92,8 +93,8 @@ services:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
       - ./third_party:/app/third_party
-    # Worker runs on CPU; GPU not requested here
-    # gpus: ${GPU_REQUEST:-all}
+    # Enable GPU acceleration for finisher/controlnet when available
+    gpus: ${GPU_REQUEST:-all}
 
   api:
     build:
@@ -239,9 +240,8 @@ services:
       - HUGGINGFACEHUB_API_TOKEN=${HF_TOKEN}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
-      - STABLEVITON_STRICT=1
-      # Allow graceful fallback and verbose errors
       - STABLEVITON_STRICT=0
+      # Allow graceful fallback and verbose errors
       - STABLEVITON_VERBOSE=1
       - STABLEVITON_FALLBACK=0
       - STABLEVITON_FORCE_FP16=1
@@ -251,6 +251,7 @@ services:
       - STV_MAX_W=512
       - DENSEPOSE_CFG=${DENSEPOSE_CFG:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.yaml}
       - DENSEPOSE_WEIGHTS=${DENSEPOSE_WEIGHTS:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.pkl}
+      # Prefer detectron2 model_zoo config to avoid broken legacy paths
       - DENSEPOSE_CFG_URL=${DENSEPOSE_CFG_URL:-https://raw.githubusercontent.com/facebookresearch/detectron2/main/projects/DensePose/configs/densepose_rcnn_R_50_FPN_s1x.yaml}
       - DENSEPOSE_WEIGHTS_URL=${DENSEPOSE_WEIGHTS_URL:-https://dl.fbaipublicfiles.com/densepose/densepose_rcnn_R_50_FPN_s1x/165712039/model_final_162be9.pkl}
     ports:

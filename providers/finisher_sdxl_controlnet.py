@@ -35,6 +35,7 @@ class SDXLControlNetFinisher:
         self.refiner_path = os.environ.get("SDXL_REFINER_PATH")
         self.cn_union_dir = os.environ.get("CONTROLNET_UNION_SDXL_DIR")
         self._pipe = None
+        self._base = None
         self._refiner = None
         self._ready = False
         try:
@@ -53,7 +54,9 @@ class SDXLControlNetFinisher:
             if self.base_path and os.path.exists(self.base_path):
                 base_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(self.base_path, torch_dtype=dtype)
             else:
-                base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE")))
+                base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                    self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
+                )
 
             # Load ControlNet: prefer offline union snapshot dir; else try configured list; else none
             controlnet = None
@@ -91,6 +94,8 @@ class SDXLControlNetFinisher:
 
             if torch.cuda.is_available():
                 self._pipe = self._pipe.to(device)
+            # Keep a base-only pipeline for fallback render if ControlNet path fails at runtime
+            self._base = base_pipe.to(device) if torch.cuda.is_available() else base_pipe
 
             # Optionally load SDXL refiner
             try:
@@ -257,7 +262,22 @@ class SDXLControlNetFinisher:
                         self._pipe.set_ip_adapter_scale(scales if len(scales) > 1 else scales[0])
             except Exception:
                 pass
-            result = self._pipe(**call_kwargs).images[0]
+            try:
+                result = self._pipe(**call_kwargs).images[0]
+            except Exception as e:
+                # Fallback: try base-only img2img without ControlNet
+                try:
+                    print(f"[SDXL finisher] controlnet path failed: {e}", file=sys.stderr)
+                except Exception:
+                    pass
+                result = self._base(
+                    prompt=prompt,
+                    negative_prompt=negative,
+                    image=image,
+                    strength=strength,
+                    num_inference_steps=int(os.environ.get("SDXL_STEPS", "30")),
+                    guidance_scale=float(os.environ.get("SDXL_GUIDANCE", "6.0")),
+                ).images[0]
             # Optional refiner pass
             if self._refiner is not None:
                 ref_strength = float(os.environ.get("SDXL_REFINER_STRENGTH", "0.15"))
@@ -272,7 +292,13 @@ class SDXLControlNetFinisher:
             out = os.path.join(out_dir, "sdxl_cnx.png")
             result.save(out)
             return out
-        except Exception:
+        except Exception as e:
+            # Last-resort fallback: return input and log error
+            try:
+                import sys
+                print(f"[SDXL finisher] fatal error: {e}", file=sys.stderr)
+            except Exception:
+                pass
             out = os.path.join(out_dir, "cnx_fallback.png")
             image.save(out)
             return out
