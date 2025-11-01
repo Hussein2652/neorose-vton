@@ -6,7 +6,8 @@ from typing import Optional
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import Response, JSONResponse
-from PIL import Image
+from PIL import Image, ImageFilter
+import numpy as np
 
 app = FastAPI(title="StableVITON Expert Service")
 
@@ -21,8 +22,6 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
     Returns (data_root_dir, im_name, cloth_name).
     """
     import tempfile
-    import numpy as np
-    import cv2  # type: ignore
 
     td = tempfile.mkdtemp(prefix="stv_", dir=None)
     root = os.path.join(td)
@@ -46,15 +45,26 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
     # Cloth image saved as PNG
     _save_image(garment_im, os.path.join(d_cloth, cloth_name), mode='RGBA')
 
-    # Cloth mask from alpha if present, else Otsu on luminance
-    gar_np = np.array(garment_im.convert('RGBA'))
-    alpha = gar_np[:, :, 3]
-    if alpha.max() == 0 or np.mean(alpha) < 1:
-        gray = cv2.cvtColor(gar_np[:, :, :3], cv2.COLOR_RGB2GRAY)
-        _, cmask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Cloth mask from alpha if present, else Otsu on luminance (pure PIL/NumPy)
+    gar_rgba = garment_im.convert('RGBA')
+    gar_np = np.array(gar_rgba)
+    alpha = gar_np[:, :, 3].astype(np.uint8)
+    if alpha.max() <= 0 or float(alpha.mean()) < 1.0:
+        gray = np.array(garment_im.convert('L'))
+        # Otsu threshold
+        hist = np.bincount(gray.flatten(), minlength=256).astype(np.float64)
+        total = gray.size
+        cum_hist = np.cumsum(hist)
+        cum_mean = np.cumsum(hist * np.arange(256))
+        global_mean = cum_mean[-1] / (total + 1e-8)
+        numerator = (global_mean * cum_hist - cum_mean) ** 2
+        denominator = cum_hist * (total - cum_hist) + 1e-8
+        sigma_b2 = numerator / denominator
+        t = int(np.nanargmax(sigma_b2))
+        cmask = (gray >= t).astype(np.uint8) * 255
     else:
         cmask = alpha
-    cv2.imwrite(os.path.join(d_cmask, cloth_name), cmask)
+    Image.fromarray(cmask).save(os.path.join(d_cmask, cloth_name))
 
     # Person mask: use provided mask if available; else full white
     if mask_im is None:
@@ -66,16 +76,16 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
     m_np = np.array(mask_im.convert('L'))
     m01 = (m_np > 127).astype(np.uint8)
     fg = u_np * m01[:, :, None] + 128 * (1 - m01)[:, :, None]
-    fg_blur = cv2.GaussianBlur(fg, (21, 21), 0)
-    cv2.imwrite(os.path.join(d_agn, im_name), cv2.cvtColor(fg_blur, cv2.COLOR_RGB2BGR))
+    fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=8))
+    fg_img.save(os.path.join(d_agn, im_name))
 
     # DensePose placeholder: zeros image (StableVITON uses it as a hint)
-    dp = np.zeros_like(u_np, dtype=np.uint8)
-    cv2.imwrite(os.path.join(d_dp, im_name), cv2.cvtColor(dp, cv2.COLOR_RGB2BGR))
+    dp = Image.new('RGB', user_im.size, color=(0, 0, 0))
+    dp.save(os.path.join(d_dp, im_name))
 
     # gt_cloth_warped_mask: zeros for test
-    z = np.zeros_like(m_np, dtype=np.uint8)
-    cv2.imwrite(os.path.join(d_gtcm, im_name), z)
+    z = Image.fromarray(np.zeros_like(m_np, dtype=np.uint8), mode='L')
+    z.save(os.path.join(d_gtcm, im_name))
 
     # Write pairs file
     pairs = os.path.join(root, 'test_pairs.txt')
