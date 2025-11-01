@@ -17,7 +17,7 @@ def _save_image(img: Image.Image, path: str, mode: str = 'RGB') -> None:
     img.convert(mode).save(path)
 
 
-def _run_schp_mask(tmp_dir: str, user_path: str) -> Optional[str]:
+def _run_schp_mask(tmp_dir: str, user_path: str) -> tuple[Optional[str], Optional[str]]:
     try:
         import subprocess
         weights = os.environ.get('SCHP_MODEL_PATH', '')
@@ -28,14 +28,21 @@ def _run_schp_mask(tmp_dir: str, user_path: str) -> Optional[str]:
         os.makedirs(out_dir, exist_ok=True)
         cmd = [s.replace('{WEIGHTS}', weights).replace('{IMAGE}', user_path).replace('{OUT}', out_dir) for s in cmd_tpl.split(' ') if s]
         r = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        # scripts/schp_infer.py prints mask path
+        # scripts/schp_infer.py prints mask path; segmentation PNG is inside out_dir
+        mask_path = None
         last = (r.stdout or '').strip().splitlines()
         if last:
             p = last[-1].strip()
-            return p if os.path.exists(p) else None
+            if os.path.exists(p):
+                mask_path = p
+        seg_path = None
+        for fn in os.listdir(out_dir):
+            if fn.lower().endswith('.png'):
+                seg_path = os.path.join(out_dir, fn)
+                break
+        return mask_path, seg_path
     except Exception:
-        return None
-    return None
+        return None, None
 
 
 def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_im: Optional[Image.Image]) -> tuple[str, str, str]:
@@ -93,7 +100,7 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
         # Save temp user image to disk for SCHP
         user_tmp = os.path.join(test, 'user_tmp.jpg')
         _save_image(user_im, user_tmp)
-        mpath = _run_schp_mask(root, user_tmp)
+        mpath, seg_path = _run_schp_mask(root, user_tmp)
         if mpath and os.path.exists(mpath):
             try:
                 mask_im = Image.open(mpath).convert('L')
@@ -103,12 +110,50 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
             mask_im = Image.new('L', user_im.size, color=255)
     _save_image(mask_im, os.path.join(d_agnm, im_name.replace('.jpg', '_mask.png')), mode='L')
 
-    # Build agnostic-v3.2: preserve person, blur background
+    # Build agnostic-v3.2 using SCHP full segmentation if available: remove garment regions
     u_np = np.array(user_im.convert('RGB'))
     m_np = np.array(mask_im.convert('L'))
     m01 = (m_np > 127).astype(np.uint8)
-    fg = u_np * m01[:, :, None] + 128 * (1 - m01)[:, :, None]
-    fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=6))
+    try:
+        import cv2
+        # If seg_path exists from SCHP, remove upper-body garment classes
+        seg_map = None
+        schp_dir = os.path.join(root, 'schp')
+        # find any png in schp dir
+        cand = None
+        if os.path.isdir(schp_dir):
+            for fn in os.listdir(schp_dir):
+                if fn.lower().endswith('.png'):
+                    cand = os.path.join(schp_dir, fn)
+                    break
+        if cand and os.path.exists(cand):
+            seg_map = np.array(Image.open(cand).convert('P'))
+        if seg_map is not None:
+            # LIP indices for garments to erase
+            GARMENT_IDS = {5, 6, 7, 10, 11, 12}
+            garment_mask = np.isin(seg_map, list(GARMENT_IDS)).astype(np.uint8)
+            # restrict to person area
+            garment_mask = garment_mask * m01
+            if garment_mask.sum() > 0:
+                # Dilate for safety
+                k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+                garment_mask = cv2.dilate(garment_mask, k, iterations=2)
+                # Inpaint removed garment area for agnostic
+                inpaint_mask = (garment_mask * 255).astype(np.uint8)
+                agn_bgr = cv2.cvtColor(u_np, cv2.COLOR_RGB2BGR)
+                agn_bgr = cv2.inpaint(agn_bgr, inpaint_mask, 3, cv2.INPAINT_TELEA)
+                agn_rgb = cv2.cvtColor(agn_bgr, cv2.COLOR_BGR2RGB)
+            else:
+                agn_rgb = u_np
+        else:
+            agn_rgb = u_np
+        # Blur background only
+        bg = 128 * (1 - m01)[:, :, None]
+        fg = agn_rgb * m01[:, :, None] + bg
+        fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=3))
+    except Exception:
+        fg = u_np * m01[:, :, None] + 128 * (1 - m01)[:, :, None]
+        fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=6))
     fg_img.save(os.path.join(d_agn, im_name))
 
     # Pseudo-DensePose: (u,v,dist) channels from mask for geometry cues
