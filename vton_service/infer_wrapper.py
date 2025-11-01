@@ -73,11 +73,19 @@ def main() -> None:
     cmd.extend(unknown)
     verbose = os.environ.get("STABLEVITON_VERBOSE") == "1"
     try:
-        r = subprocess.run(cmd, check=True, capture_output=verbose, text=True)
+        r = subprocess.run(cmd, check=True, capture_output=True, text=True)
         if verbose and r.stdout:
             print(r.stdout)
         if verbose and r.stderr:
             print(r.stderr, file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        # Always surface upstream CLI output to help diagnose
+        print("[infer_wrapper] Upstream inference.py failed", file=sys.stderr)
+        if e.stdout:
+            print("[infer_wrapper stdout]", e.stdout, file=sys.stderr)
+        if e.stderr:
+            print("[infer_wrapper stderr]", e.stderr, file=sys.stderr)
+        raise
     finally:
         try:
             os.remove(cleaned)
@@ -87,4 +95,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
