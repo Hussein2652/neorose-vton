@@ -24,13 +24,39 @@ def _save_image(img: Image.Image, path: str, mode: str = 'RGB') -> None:
     img.convert(mode).save(path)
 
 
+def _best_size_from_input(size: Tuple[int, int], max_h: int = 640, max_w: int = 512) -> Tuple[int, int]:
+    """Compute StableVITON target (H,W) from input, preserving aspect and snapping to /64.
+    Caps by max_h/max_w and ensures a reasonable minimum to avoid degenerate latents.
+    """
+    w0, h0 = size
+    if h0 <= 0 or w0 <= 0:
+        return (512, 384)
+    # Scale to fit caps while preserving aspect (note PIL size is (W,H))
+    scale = min(max_h / h0, max_w / w0, 1.0)
+    ht = int(round((h0 * scale) / 64.0) * 64)
+    wt = int(round((w0 * scale) / 64.0) * 64)
+    ht = max(128, min(max_h, ht))
+    wt = max(128, min(max_w, wt))
+    # Avoid too small latents like 8x6; bump to >= 192 each when possible
+    if ht < 192 or wt < 192:
+        ht = max(ht, 192)
+        wt = max(wt, 192)
+    return (ht, wt)
+
+
 def _run_schp_mask(tmp_dir: str, user_path: str) -> tuple[Optional[str], Optional[str]]:
     try:
         import subprocess
         weights = os.environ.get('SCHP_MODEL_PATH', '')
         cmd_tpl = os.environ.get('SCHP_INFER_CMD')
         if not cmd_tpl or not weights or not os.path.exists(weights):
-            return None
+            # Log why SCHP is skipped
+            try:
+                import sys
+                print(f"[SCHP] skipped: cmd_tpl set={bool(cmd_tpl)}, weights_exists={os.path.exists(weights) if weights else False}", file=sys.stderr)
+            except Exception:
+                pass
+            return None, None
         out_dir = os.path.join(tmp_dir, 'schp')
         os.makedirs(out_dir, exist_ok=True)
         cmd = [s.replace('{WEIGHTS}', weights).replace('{IMAGE}', user_path).replace('{OUT}', out_dir) for s in cmd_tpl.split(' ') if s]
@@ -230,13 +256,15 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
     Placeholder hook to call third_party.stableviton code if present.
     For now, do a simple alpha paste if code is not present.
     """
-    # Preferred: import a Python hook if present
+    # Preferred: import a Python hook if present; if it returns None, treat as failure and continue
     try:
         import importlib
         mod = importlib.import_module('third_party.stableviton.infer')
         if hasattr(mod, 'run_infer'):
             out = mod.run_infer(user_im, garment_im, mask_im)  # type: ignore
-            return out
+            if out is not None:
+                return out
+            # Upstream returned None; fall through to CLI path
     except Exception:
         pass
     # Fallback: run a CLI if defined via env STABLEVITON_INFER_CMD
@@ -305,10 +333,19 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                             break
                 if cand and os.path.exists(cand):
                     return Image.open(cand).convert('RGB')
-    except Exception:
+        else:
+            # No CLI template configured
+            print('[StableVITON] STABLEVITON_INFER_CMD not set; skipping CLI', file=sys.stderr)
+    except Exception as ex:
+        # Always print exception for debugging
+        try:
+            print('[StableVITON] exception in CLI path:', ex, file=sys.stderr)
+            import traceback as _tb
+            _tb.print_exc()
+        except Exception:
+            pass
         if os.environ.get('STABLEVITON_STRICT', '0') == '1':
             return None
-        traceback.print_exc()
     try:
         # Fallback: alpha paste centered (until runtime code is present)
         if os.environ.get('STABLEVITON_FALLBACK', '1') == '1':
@@ -340,3 +377,8 @@ async def infer(user: UploadFile = File(...), garment: UploadFile = File(...), m
         return Response(buf.getvalue(), media_type='image/png')
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get('/health')
+def health():
+    return {"status": "ok"}

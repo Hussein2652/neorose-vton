@@ -240,6 +240,8 @@ services:
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
       - STABLEVITON_STRICT=1
+      # Allow graceful fallback and verbose errors
+      - STABLEVITON_STRICT=0
       - STABLEVITON_VERBOSE=1
       - STABLEVITON_FALLBACK=0
       - STABLEVITON_FORCE_FP16=1
@@ -254,7 +256,7 @@ services:
     ports:
       - "9010:9010"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9010 || curl -sf http://localhost:9010 || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9010/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
