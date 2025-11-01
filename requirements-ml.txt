@@ -6,6 +6,7 @@ open-clip-torch
 diffusers
 transformers
 ultralytics
+accelerate
 realesrgan
 huggingface-hub
 controlnet-aux
