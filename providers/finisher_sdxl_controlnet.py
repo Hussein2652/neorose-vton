@@ -50,13 +50,23 @@ class SDXLControlNetFinisher:
             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-            # Load base pipeline from single safetensors file if provided, else from_pretrained
-            if self.base_path and os.path.exists(self.base_path):
-                base_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(self.base_path, torch_dtype=dtype)
-            else:
-                base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-                    self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
-                )
+            # Prefer from_pretrained (snapshot) for full components; fall back to single-file if requested only
+            prefer_pretrained = os.environ.get("FORCE_SDXL_PRETRAINED", "1") == "1"
+            base_pipe = None
+            if prefer_pretrained:
+                try:
+                    base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                        self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
+                    )
+                except Exception:
+                    base_pipe = None
+            if base_pipe is None:
+                if self.base_path and os.path.exists(self.base_path):
+                    base_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(self.base_path, torch_dtype=dtype)
+                else:
+                    base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                        self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
+                    )
 
             # Load ControlNet: prefer offline union snapshot dir; else try configured list; else none
             controlnet = None
@@ -170,8 +180,27 @@ class SDXLControlNetFinisher:
     def process(self, soft_render_path: str, out_dir: str, denoise: float = 0.20, controls: Optional[dict] = None, adapters: Optional[dict] = None) -> str:
         os.makedirs(out_dir, exist_ok=True)
         image = Image.open(soft_render_path).convert("RGB")
-        prompt = os.environ.get("SDXL_PROMPT", "photo-realistic garment try-on, detailed fabric, natural lighting")
-        negative = os.environ.get("SDXL_NEGATIVE", "low quality, blur, artifacts, watermark")
+        # Optional pre-upscale to target long side for more details
+        try:
+            tgt_long = int(os.environ.get("FINISHER_RESIZE_LONG", "1280"))
+        except Exception:
+            tgt_long = 1280
+        if max(image.size) < tgt_long:
+            w, h = image.size
+            if w >= h:
+                nw, nh = tgt_long, int(h * (tgt_long / float(w)))
+            else:
+                nh, nw = tgt_long, int(w * (tgt_long / float(h)))
+            image = image.resize((nw, nh), Image.LANCZOS)
+
+        prompt = os.environ.get(
+            "SDXL_PROMPT",
+            "ultra-detailed, photorealistic apparel try-on, crisp fabric texture, natural lighting, sharp focus, high resolution",
+        )
+        negative = os.environ.get(
+            "SDXL_NEGATIVE",
+            "blurry, low-resolution, out of focus, artifacts, deformed body, watermark, oversmooth, noise",
+        )
         if not self._ready:
             out = os.path.join(out_dir, "cnx_fallback.png")
             image.save(out)
@@ -289,6 +318,27 @@ class SDXLControlNetFinisher:
                     num_inference_steps=int(os.environ.get("SDXL_REFINER_STEPS", "20")),
                     guidance_scale=float(os.environ.get("SDXL_REFINER_GUIDANCE", "5.0")),
                 ).images[0]
+
+            # Optional: Preserve face/outside regions from the original to keep identity sharp
+            try:
+                preserve = os.environ.get("SDXL_BLEND_PRESERVE_OUTSIDE", "1") == "1"
+                mask_path = (controls or {}).get("seg") if controls else None
+                user_path = (adapters or {}).get("user") if adapters else None
+                if preserve and mask_path and user_path and os.path.exists(mask_path) and os.path.exists(user_path):
+                    base_im = Image.open(user_path).convert("RGB").resize(result.size, Image.LANCZOS)
+                    m = Image.open(mask_path).convert("L").resize(result.size, Image.BILINEAR)
+                    # Compute head preserve region: top portion of person mask
+                    import numpy as np
+                    arr = np.array(m, dtype=np.uint8)
+                    h = arr.shape[0]
+                    head = np.zeros_like(arr)
+                    head[: int(h * 0.32), :] = 255
+                    preserve_mask = Image.fromarray(((arr > 127) & (head > 0)).astype("uint8") * 255, mode="L")
+                    ksz = int(os.environ.get("SDXL_BLEND_PRESERVE_KERNEL", "21"))
+                    preserve_mask = preserve_mask.filter(ImageFilter.GaussianBlur(radius=max(3, ksz // 2)))
+                    result = Image.composite(base_im, result, preserve_mask)
+            except Exception:
+                pass
             out = os.path.join(out_dir, "sdxl_cnx.png")
             result.save(out)
             return out

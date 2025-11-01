@@ -92,6 +92,9 @@ hf_models:
   - lllyasviel/Annotators
   # ControlNet-Union SDXL needs a full local snapshot folder (configs + weights)
   - xinsir/controlnet-union-sdxl-1.0
+  # SDXL base/refiner snapshots to allow from_pretrained offline
+  - stabilityai/stable-diffusion-xl-base-1.0
+  - stabilityai/stable-diffusion-xl-refiner-1.0
   # Snapshot IP-Adapter repos to avoid fragile direct-file links
   - h94/IP-Adapter
   - h94/IP-Adapter-FaceID
