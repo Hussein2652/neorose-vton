@@ -47,8 +47,12 @@ class SDXLControlNetFinisher:
             )  # type: ignore
             from typing import Any
 
-            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Cooperatively yield GPU to the VTON expert when reserved
+            locks_dir = os.environ.get("LOCKS_DIR", os.path.join("storage", "locks"))
+            gpu_lock_path = os.path.join(locks_dir, "gpu.lock")
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(gpu_lock_path))
+            dtype = torch.float16 if use_cuda else torch.float32
+            device = "cuda" if use_cuda else "cpu"
 
             # Prefer from_pretrained (snapshot) for full components; fall back to single-file if requested only
             prefer_pretrained = os.environ.get("FORCE_SDXL_PRETRAINED", "1") == "1"
@@ -104,7 +108,7 @@ class SDXLControlNetFinisher:
             else:
                 self._pipe = base_pipe
 
-            if torch.cuda.is_available():
+            if use_cuda:
                 self._pipe = self._pipe.to(device)
                 try:
                     self._pipe.enable_xformers_memory_efficient_attention()
@@ -116,7 +120,7 @@ class SDXLControlNetFinisher:
             except Exception:
                 pass
             # Keep a base-only pipeline for fallback render if ControlNet path fails at runtime
-            self._base = base_pipe.to(device) if torch.cuda.is_available() else base_pipe
+            self._base = base_pipe.to(device) if use_cuda else base_pipe
             try:
                 self._base.enable_vae_slicing(); self._base.enable_vae_tiling()
             except Exception:
@@ -178,11 +182,11 @@ class SDXLControlNetFinisher:
             try:
                 if self.refiner_path and os.path.exists(self.refiner_path):
                     self._refiner = StableDiffusionXLImg2ImgPipeline.from_single_file(self.refiner_path, torch_dtype=dtype)
-                    if torch.cuda.is_available():
+                    if use_cuda:
                         self._refiner = self._refiner.to(device)
                 else:
                     self._refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(self.refiner_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE")))
-                    if torch.cuda.is_available():
+                    if use_cuda:
                         self._refiner = self._refiner.to(device)
             except Exception:
                 self._refiner = None

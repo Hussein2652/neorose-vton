@@ -24,7 +24,10 @@ def control_edges(user_image_path: str, out_dir: str) -> str:
             hed = HEDdetector.from_pretrained('lllyasviel/Annotators')
         # Prefer GPU for annotators if available
         try:
-            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            import os
+            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
+            dev = 'cuda' if use_cuda else 'cpu'
             if hasattr(hed, 'to'):
                 hed.to(dev)
         except Exception:
@@ -55,7 +58,10 @@ def control_depth(user_image_path: str, out_dir: str) -> str:
         else:
             zoe = ZoeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            import os
+            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
+            dev = 'cuda' if use_cuda else 'cpu'
             if hasattr(zoe, 'to'):
                 zoe.to(dev)
         except Exception:
@@ -97,7 +103,10 @@ def control_normals(user_image_path: str, out_dir: str) -> str:
         else:
             nb = NormalBaeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            import os
+            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
+            dev = 'cuda' if use_cuda else 'cpu'
             if hasattr(nb, 'to'):
                 nb.to(dev)
         except Exception:
@@ -119,7 +128,10 @@ def control_pose(user_image_path: str, keypoints_path: Optional[str], out_dir: s
         else:
             op = OpenposeDetector.from_pretrained('lllyasviel/Annotators')
         try:
-            dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+            import os
+            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
+            dev = 'cuda' if use_cuda else 'cpu'
             if hasattr(op, 'to'):
                 op.to(dev)
         except Exception:

@@ -28,6 +28,7 @@ from providers.face_codeformer import CodeFormerRestorer
 from providers.segmentation_torchvision import TorchVisionPersonSegmenter
 from providers.pose_ultralytics import YOLOv8PoseExtractor
 from providers.geometry_smplx_stub import SMPLXGeometry
+from .matting import refine_mask
 
 
 @dataclass
@@ -155,6 +156,11 @@ class VFRPipeline:
         keypoints_path = os.path.join(person_dir, "keypoints.json")
         if not os.path.exists(mask_path):
             mask_path = self.person.process(user_image_path, person_dir)
+        # Refine mask edges (RVM if available; else soft matting)
+        try:
+            mask_path = refine_mask(user_image_path, mask_path, person_dir) or mask_path
+        except Exception:
+            pass
         if not os.path.exists(keypoints_path):
             keypoints_path = self.pose.process(user_image_path, person_dir)
         user_can = UserCanonical(
@@ -183,7 +189,8 @@ class VFRPipeline:
         try:
             if self.cfg.get("vton_enabled", True):
                 vton_dir = os.path.join(work_root, "vton")
-                vton_path = self.vton.process(user_can.user_image_path, warped_garment_path, user_can.mask_path, vton_dir)
+                # IMPORTANT: pass the original garment front image to the expert
+                vton_path = self.vton.process(user_can.user_image_path, garment.garment_front_path, user_can.mask_path, vton_dir)
                 if vton_path and os.path.exists(vton_path):
                     soft_input = vton_path
         except Exception:

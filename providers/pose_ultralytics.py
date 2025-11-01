@@ -32,9 +32,13 @@ class YOLOv8PoseExtractor:
         try:
             from ultralytics import YOLO  # type: ignore
             import torch  # type: ignore
+            import os
+            # Cooperatively yield GPU if reserved by expert
+            locks_dir = os.environ.get('LOCKS_DIR', os.path.join('storage','locks'))
+            use_cuda = torch.cuda.is_available() and (not os.path.exists(os.path.join(locks_dir, 'gpu.lock')))
             model = YOLO(self.model_name)
-            # Force GPU if available
-            device = 0 if torch.cuda.is_available() else 'cpu'
+            # Force GPU if allowed
+            device = 0 if use_cuda else 'cpu'
             res = model(user_image_path, device=device)
             # Take first result
             r0 = res[0]

@@ -401,6 +401,19 @@ def ingest_manual_assets(manual_dir: str) -> dict:
                         pass
             report["actions"].append({"third_party": [schp_src, tp_dst]})
 
+        # Robust Video Matting (optional, vendored code)
+        rvm_src = None
+        for name in ("rvm", "RVM", "robust_video_matting"):
+            cand = os.path.join(manual_dir, name)
+            if os.path.isdir(cand):
+                rvm_src = cand
+                break
+        if rvm_src:
+            rvm_dst = os.path.join("third_party", "rvm")
+            os.makedirs(rvm_dst, exist_ok=True)
+            _copytree(rvm_src, rvm_dst)
+            report["actions"].append({"third_party": [rvm_src, rvm_dst]})
+
         # StableVITON code/weights (optional)
         stv_src = None
         for name in ("stableviton", "StableVITON", "stable_viton", "stableviton_downloads"):

@@ -57,15 +57,16 @@ services:
       - IP_ADAPTER_SDXL_WEIGHTS_NAME=ip-adapter_sdxl.safetensors
       - IP_ADAPTER_GARMENT_SCALE=1.0
       - IP_ADAPTER_FACE_SCALE=0.85
-      - SDXL_STEPS=60
+      - SDXL_STEPS=90
       - SDXL_GUIDANCE=6.5
       - SDXL_REFINER_STEPS=20
       - SDXL_REFINER_GUIDANCE=5.5
       - SDXL_PROMPT=ultra-detailed, photorealistic apparel try-on, crisp fabric texture, natural lighting, sharp focus, high resolution
       - SDXL_NEGATIVE=blurry, low-resolution, out of focus, artifacts, deformed body, watermark, oversmooth, noise
-      - FINISHER_RESIZE_LONG=1280
+      - FINISHER_RESIZE_LONG=1792
       - SDXL_BLEND_PRESERVE_OUTSIDE=1
       - SDXL_BLEND_PRESERVE_KERNEL=21
+      - SDXL_DEBUG=0
       # Prefer separate ControlNets (pose+depth+canny) over union for stability
       - SDXL_CN_IDS=diffusers/controlnet-openpose-sdxl-1.0,diffusers/controlnet-depth-sdxl-1.0,diffusers/controlnet-canny-sdxl-1.0
       - CTRL_POSE=0.9
@@ -139,7 +140,8 @@ services:
       - IP_ADAPTER_GARMENT_SCALE=1.0
       - SDXL_PROMPT=ultra-detailed, photorealistic apparel try-on, crisp fabric texture, natural lighting, sharp focus, high resolution
       - SDXL_NEGATIVE=blurry, low-resolution, out of focus, artifacts, deformed body, watermark, oversmooth, noise
-      - FINISHER_RESIZE_LONG=1280
+      - FINISHER_RESIZE_LONG=1792
+      - RVM_WEIGHTS=/app/storage/models/rvm_mobilenetv3/v1.0.0/rvm_mobilenetv3.pth
       - SDXL_BLEND_PRESERVE_OUTSIDE=1
       - SDXL_BLEND_PRESERVE_KERNEL=21
       - SDXL_CN_IDS=diffusers/controlnet-openpose-sdxl-1.0,diffusers/controlnet-depth-sdxl-1.0,diffusers/controlnet-canny-sdxl-1.0
@@ -264,7 +266,7 @@ services:
       - STABLEVITON_VERBOSE=1
       - STABLEVITON_FALLBACK=0
       - STABLEVITON_FORCE_FP16=1
-      - STABLEVITON_DENOISE_STEPS=50
+      - STABLEVITON_DENOISE_STEPS=100
       - STABLEVITON_DEBUG=1
       - STV_MAX_H=640
       - STV_MAX_W=512

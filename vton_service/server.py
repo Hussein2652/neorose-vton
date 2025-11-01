@@ -102,13 +102,28 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
 
     im_name = 'user.jpg'
     cloth_name = 'garment.png'
-    # Save base user/cloth
+    # Save base user
     _save_image(user_im, os.path.join(d_img, im_name))
-    # Cloth image saved as PNG
-    _save_image(garment_im, os.path.join(d_cloth, cloth_name), mode='RGBA')
+    # Cloth: place garment on a canvas matching user size so all inputs share HxW
+    # This avoids Albumentations shape checks inside the StableVITON dataset
+    gar_rgba0 = garment_im.convert('RGBA')
+    gw0, gh0 = gar_rgba0.size
+    # Fit garment within 80% of user frame while preserving aspect
+    max_w = int(user_im.width * 0.8)
+    max_h = int(user_im.height * 0.8)
+    scale = min(max_w / max(1, gw0), max_h / max(1, gh0), 1.0)
+    gw = max(1, int(round(gw0 * scale)))
+    gh = max(1, int(round(gh0 * scale)))
+    gar_rgba = gar_rgba0.resize((gw, gh), Image.LANCZOS)
+    gar_canv = Image.new('RGBA', user_im.size, (0, 0, 0, 0))
+    offx = (user_im.width - gw) // 2
+    offy = (user_im.height - gh) // 2
+    gar_canv.paste(gar_rgba, (offx, offy), gar_rgba)
+    # Store cloth as RGB (background black) to match common StableVITON expectations
+    _save_image(gar_canv.convert('RGB'), os.path.join(d_cloth, cloth_name), mode='RGB')
 
     # Cloth mask from alpha if present, else Otsu on luminance; refine morphologically
-    gar_rgba = garment_im.convert('RGBA')
+    gar_rgba = gar_rgba  # use resized RGBA
     gar_np = np.array(gar_rgba)
     alpha = gar_np[:, :, 3].astype(np.uint8)
     if alpha.max() <= 0 or float(alpha.mean()) < 1.0:
@@ -134,7 +149,15 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
         cmask = cm
     except Exception:
         pass
-    Image.fromarray(cmask).save(os.path.join(d_cmask, cloth_name))
+    # Place mask onto user-sized canvas aligned with cloth placement
+    cm_h, cm_w = cmask.shape[:2]
+    m_canv = Image.new('L', user_im.size, color=0)
+    try:
+        m_canv.paste(Image.fromarray(cmask), (offx, offy))
+    except Exception:
+        # If paste fails (safety), resize to user size
+        m_canv = Image.fromarray(cmask).resize(user_im.size, Image.NEAREST)
+    m_canv.save(os.path.join(d_cmask, cloth_name))
 
     # Person mask: use provided mask, else SCHP if available, else full white
     if mask_im is None:
@@ -286,11 +309,15 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                         cmd[i+1] = str(Ht)
                     if tok == '--img_W' and i + 1 < len(cmd):
                         cmd[i+1] = str(Wt)
+                # Reserve GPU (cooperative) while the expert runs; fall back to best-effort if lock not available
+                ctx = gpu_reservation('vton_expert') if gpu_reservation else None
+                mgr = ctx if ctx is not None else nullcontext()  # type: ignore
                 try:
-                    r = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                    if os.environ.get('STABLEVITON_VERBOSE') == '1':
-                        print('[StableVITON CLI stdout]', r.stdout)
-                        print('[StableVITON CLI stderr]', r.stderr)
+                    with mgr:
+                        r = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                        if os.environ.get('STABLEVITON_VERBOSE') == '1':
+                            print('[StableVITON CLI stdout]', r.stdout)
+                            print('[StableVITON CLI stderr]', r.stderr)
                 except subprocess.CalledProcessError as e:
                     print('[StableVITON CLI failed]', e, file=sys.stderr)
                     if e.stdout:
@@ -382,3 +409,9 @@ async def infer(user: UploadFile = File(...), garment: UploadFile = File(...), m
 @app.get('/health')
 def health():
     return {"status": "ok"}
+try:
+    # Cooperative GPU reservation shared via storage/locks/gpu.lock
+    from gpu_lock import gpu_reservation  # type: ignore
+except Exception:
+    gpu_reservation = None  # type: ignore
+from contextlib import nullcontext

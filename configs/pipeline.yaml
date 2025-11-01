@@ -39,7 +39,7 @@ vton:
   provider: stableviton  # local | stableviton | remote
 
 providers:
-  segmentation: local  # local | torchvision | remote
+  segmentation: torchvision  # local | torchvision | remote
   pose: yolov8  # mediapipe | yolov8 | remote
   geometry: smplx  # stub | smplx | remote
 
