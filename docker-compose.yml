@@ -72,17 +72,18 @@ services:
       - S3_ACCESS_KEY_ID=minioadmin
       - S3_SECRET_ACCESS_KEY=minioadmin
       - S3_PREFIX=vfr/
+      - CUDA_VISIBLE_DEVICES=
     depends_on:
       - redis
       - postgres
-    command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO"]
+    command: ["celery", "-A", "backend.app.tasks", "worker", "-l", "INFO", "-c", "1"]
     restart: unless-stopped
     volumes:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
       - ./third_party:/app/third_party
-    # Re-enable GPU for worker so pipeline models run on CUDA
-    gpus: ${GPU_REQUEST:-all}
+    # Worker runs on CPU; GPU not requested here
+    # gpus: ${GPU_REQUEST:-all}
 
   api:
     build:
@@ -137,6 +138,7 @@ services:
       - S3_PREFIX=vfr/
       - RESULT_REDIRECT=1
       - VTON_EXPERT_URL=http://vton_expert:9010
+      - CUDA_VISIBLE_DEVICES=
     restart: unless-stopped
     ports:
       - "8000:8000"
