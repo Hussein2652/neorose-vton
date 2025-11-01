@@ -51,7 +51,6 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
     replaced_cuda = False
     inserted_with = False
     pending_indent_for_xsamples = False
-    inserted_low_vram_before_get = False
     inserted_low_vram_before_sample = False
     inserted_low_vram_before_decode = False
 
@@ -70,21 +69,20 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
             added_arg = True
             continue
 
-        # Replace model.cuda() with no-op; we will shift modules selectively via low_vram_shift
+        # Keep full model on CUDA so Lightning's self.device is cuda;
+        # we'll still juggle heavy submodules via low_vram_shift during phases
         if (not replaced_cuda) and "model = model.cuda()" in line:
-            indent = line[: len(line) - len(line.lstrip())]
-            out.append(f"{indent}# Disabled full .cuda(); using low_vram_shift instead\n")
-            out.append(f"{indent}model = model\n")
+            out.append(line)
             replaced_cuda = True
             continue
 
-        # Insert low_vram_shift before get_input to ensure VAE on CUDA and UNet on CPU during encode
-        if (not inserted_low_vram_before_get) and "z, c = model.get_input(batch, params.first_stage_key)" in line:
+        # Ensure VAE is on CUDA for encode/get_input while UNet/Control remain on CPU
+        if "z, c = model.get_input(batch, params.first_stage_key)" in line:
             indent = line[: len(line) - len(line.lstrip())]
             out.append(f"{indent}# Low VRAM: VAE on CUDA, UNet on CPU for encode\n")
             out.append(f"{indent}model.low_vram_shift(False)\n")
-            out.append(line)
-            inserted_low_vram_before_get = True
+            out.append(f"{indent}with autocast(enabled=args.fp16, dtype=torch.float16 if args.fp16 else torch.float32):\n")
+            out.append(f"{indent}    {line.lstrip()}")
             continue
 
         # Wrap sampling + decode in autocast
