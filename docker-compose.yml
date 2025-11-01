@@ -213,7 +213,7 @@ services:
       - PYTHONUNBUFFERED=1
       - STABLEVITON_WEIGHTS_DIR=/app/storage/models/stableviton/weights
       - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path {WEIGHTS_DIR}/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 384 --img_W 288 --save_dir {OUT} --unpair
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:64,expandable_segments:True
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:64,garbage_collection_threshold:0.9
       - XFORMERS_MEMORY_EFFICIENT_ATTENTION=1
       - HF_HOME=/app/storage/models/hf
       - HF_TOKEN=${HF_TOKEN}
