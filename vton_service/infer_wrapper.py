@@ -62,10 +62,11 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
             inserted_import = True
             continue
 
-        # After --eta arg, add --fp16
+        # After --eta arg, add --fp16 and optional vae path
         if (not added_arg) and "parser.add_argument(\"--eta\"" in line:
             out.append(line)
             out.append("    parser.add_argument(\"--fp16\", action=\"store_true\", help=\"Run inference in float16 (mixed precision)\")\n")
+            out.append("    parser.add_argument(\"--vae_load_path\", type=str, default=\"\", help=\"Optional VAE finetune checkpoint\")\n")
             added_arg = True
             continue
 
@@ -117,6 +118,27 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
         # Reduce DataLoader worker count to limit memory footprint
         if "DataLoader(dataset, num_workers=4" in line:
             out.append(line.replace("num_workers=4", "num_workers=0"))
+            continue
+
+        # After main state_dict load, optionally load VAE finetune
+        if "model.load_state_dict(load_cp)" in line:
+            out.append(line)
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}# Optionally load VAE finetune checkpoint\n")
+            out.append(f"{indent}if hasattr(args, 'vae_load_path') and args.vae_load_path and os.path.exists(args.vae_load_path):\n")
+            out.append(f"{indent}    _sd = torch.load(args.vae_load_path, map_location='cpu')\n")
+            out.append(f"{indent}    _sd = _sd.get('state_dict', _sd)\n")
+            out.append(f"{indent}    _new = {{}}\n")
+            out.append(f"{indent}    for _k, _v in _sd.items():\n")
+            out.append(f"{indent}        if _k.startswith('first_stage_model.'):\n")
+            out.append(f"{indent}            _new[_k[len('first_stage_model.'):]] = _v\n")
+            out.append(f"{indent}    if len(_new) == 0:\n")
+            out.append(f"{indent}        _new = _sd\n")
+            out.append(f"{indent}    try:\n")
+            out.append(f"{indent}        model.first_stage_model.load_state_dict(_new, strict=False)\n")
+            out.append(f"{indent}        print('Loaded VAE finetune from', args.vae_load_path)\n")
+            out.append(f"{indent}    except Exception as _e:\n")
+            out.append(f"{indent}        print('VAE finetune load failed:', _e)\n")
             continue
 
         out.append(line)
@@ -181,6 +203,13 @@ def main() -> None:
     denoise_steps = os.environ.get("STABLEVITON_DENOISE_STEPS", "30")
     if denoise_steps:
         cmd.extend(["--denoise_steps", str(denoise_steps)])
+    # Pass VAE finetune path if present in the repo ckpts
+    vae_repo_path = "/app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_VAE_finetuning.ckpt"
+    alt_vae_path = os.path.join(os.environ.get("STABLEVITON_WEIGHTS_DIR", ""), "VITONHD_VAE_finetuning.ckpt")
+    if os.path.exists(vae_repo_path):
+        cmd.extend(["--vae_load_path", vae_repo_path])
+    elif alt_vae_path and os.path.exists(alt_vae_path):
+        cmd.extend(["--vae_load_path", alt_vae_path])
     verbose = os.environ.get("STABLEVITON_VERBOSE") == "1"
     try:
         env = os.environ.copy()

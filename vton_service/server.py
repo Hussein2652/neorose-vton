@@ -16,6 +16,27 @@ def _save_image(img: Image.Image, path: str, mode: str = 'RGB') -> None:
     img.convert(mode).save(path)
 
 
+def _run_schp_mask(tmp_dir: str, user_path: str) -> Optional[str]:
+    try:
+        import subprocess
+        weights = os.environ.get('SCHP_MODEL_PATH', '')
+        cmd_tpl = os.environ.get('SCHP_INFER_CMD')
+        if not cmd_tpl or not weights or not os.path.exists(weights):
+            return None
+        out_dir = os.path.join(tmp_dir, 'schp')
+        os.makedirs(out_dir, exist_ok=True)
+        cmd = [s.replace('{WEIGHTS}', weights).replace('{IMAGE}', user_path).replace('{OUT}', out_dir) for s in cmd_tpl.split(' ') if s]
+        r = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # scripts/schp_infer.py prints mask path
+        last = (r.stdout or '').strip().splitlines()
+        if last:
+            p = last[-1].strip()
+            return p if os.path.exists(p) else None
+    except Exception:
+        return None
+    return None
+
+
 def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_im: Optional[Image.Image]) -> tuple[str, str, str]:
     """
     Build a minimal StableVITON dataset structure for a single pair under a temp dir.
@@ -66,9 +87,19 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
         cmask = alpha
     Image.fromarray(cmask).save(os.path.join(d_cmask, cloth_name))
 
-    # Person mask: use provided mask if available; else full white
+    # Person mask: use provided mask, else SCHP if available, else full white
     if mask_im is None:
-        mask_im = Image.new('L', user_im.size, color=255)
+        # Save temp user image to disk for SCHP
+        user_tmp = os.path.join(test, 'user_tmp.jpg')
+        _save_image(user_im, user_tmp)
+        mpath = _run_schp_mask(root, user_tmp)
+        if mpath and os.path.exists(mpath):
+            try:
+                mask_im = Image.open(mpath).convert('L')
+            except Exception:
+                mask_im = None
+        if mask_im is None:
+            mask_im = Image.new('L', user_im.size, color=255)
     _save_image(mask_im, os.path.join(d_agnm, im_name.replace('.jpg', '_mask.png')), mode='L')
 
     # Build agnostic-v3.2: blur masked user as a coarse canonical input
