@@ -100,7 +100,7 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
         pass
     # Fallback: run a CLI if defined via env STABLEVITON_INFER_CMD
     try:
-        import subprocess, tempfile
+        import subprocess, tempfile, sys, traceback
         cmd_tpl = os.environ.get('STABLEVITON_INFER_CMD')
         if cmd_tpl:
             # Build one-pair dataset
@@ -110,7 +110,20 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                 os.makedirs(o, exist_ok=True)
                 weights_dir = os.environ.get('STABLEVITON_WEIGHTS_DIR', os.path.join('storage','models','stableviton','weights'))
                 cmd = [s.replace('{DATA_ROOT}', root).replace('{OUT}', o).replace('{WEIGHTS_DIR}', weights_dir) for s in cmd_tpl.split(' ') if s]
-                subprocess.run(cmd, check=True)
+                try:
+                    r = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    if os.environ.get('STABLEVITON_VERBOSE') == '1':
+                        print('[StableVITON CLI stdout]', r.stdout)
+                        print('[StableVITON CLI stderr]', r.stderr)
+                except subprocess.CalledProcessError as e:
+                    print('[StableVITON CLI failed]', e, file=sys.stderr)
+                    if e.stdout:
+                        print('[stdout]', e.stdout, file=sys.stderr)
+                    if e.stderr:
+                        print('[stderr]', e.stderr, file=sys.stderr)
+                    if os.environ.get('STABLEVITON_STRICT', '0') == '1':
+                        return None
+                    # else continue to fallback below
                 # Find result image in save_dir (pair or unpair)
                 cand = None
                 for sub in ('pair', 'unpair', ''):
@@ -125,18 +138,22 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                 if cand and os.path.exists(cand):
                     return Image.open(cand).convert('RGB')
     except Exception:
-        pass
+        if os.environ.get('STABLEVITON_STRICT', '0') == '1':
+            return None
+        traceback.print_exc()
     try:
         # Fallback: alpha paste centered (until runtime code is present)
-        user = user_im.convert('RGB')
-        g = garment_im.convert('RGBA')
-        w, h = user.size
-        gw, gh = g.size
-        x = (w - gw) // 2
-        y = (h - gh) // 2
-        comp = user.copy()
-        comp.paste(g, (x, y), g)
-        return comp
+        if os.environ.get('STABLEVITON_FALLBACK', '1') == '1':
+            user = user_im.convert('RGB')
+            g = garment_im.convert('RGBA')
+            w, h = user.size
+            gw, gh = g.size
+            x = (w - gw) // 2
+            y = (h - gh) // 2
+            comp = user.copy()
+            comp.paste(g, (x, y), g)
+            return comp
+        return None
     except Exception:
         return None
 

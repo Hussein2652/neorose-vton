@@ -62,6 +62,7 @@ services:
       - SMPLX_HOME=/app/storage/models/smplx
       - PIXIE_HOME=/app/storage/models/pixie
       - VTON_EXPERT_URL=http://vton_expert:9010
+      - VTON_EXPERT_REQUIRED=1
       - SCHP_REPO_DIR=/app/third_party/schp
       - SCHP_MODEL_PATH=/app/storage/models/schp_lip/20190826/exp-schp-201908261155-lip.pth
       - SCHP_INFER_CMD=python scripts/schp_infer.py --weights {WEIGHTS} --image {IMAGE} --out {OUT}
@@ -218,6 +219,9 @@ services:
       - HUGGINGFACEHUB_API_TOKEN=${HF_TOKEN}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
+      - STABLEVITON_STRICT=1
+      - STABLEVITON_VERBOSE=1
+      - STABLEVITON_FALLBACK=0
     ports:
       - "9010:9010"
     volumes:
