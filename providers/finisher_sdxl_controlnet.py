@@ -45,8 +45,14 @@ class SDXLControlNetFinisher:
                 ControlNetModel,
                 StableDiffusionXLControlNetImg2ImgPipeline,
                 StableDiffusionXLImg2ImgPipeline,
+                DPMSolverMultistepScheduler,
             )  # type: ignore
             from typing import Any
+            try:
+                import torch.backends.cudnn as cudnn  # type: ignore
+                cudnn.benchmark = True
+            except Exception:
+                pass
 
             # Cooperatively yield GPU to the VTON expert when reserved
             locks_dir = os.environ.get("LOCKS_DIR", os.path.join("storage", "locks"))
@@ -80,6 +86,12 @@ class SDXLControlNetFinisher:
                     base_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
                         self.base_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
                     )
+
+            # Switch to a faster scheduler (DPM-Solver) for speed
+            try:
+                base_pipe.scheduler = DPMSolverMultistepScheduler.from_config(base_pipe.scheduler.config)
+            except Exception:
+                pass
 
             # Load ControlNet: prefer offline union snapshot dir; else try configured list; else none
             controlnet = None

@@ -6,6 +6,9 @@ from .storage import Storage
 from .db import get_job, get_plan
 from .db import update_job
 
+# Reuse a single in-process pipeline to avoid reloading heavy models per task
+_PIPELINE: Optional[VFRPipeline] = None
+
 
 def run_tryon_job(
     user_image_path: str,
@@ -24,7 +27,10 @@ def run_tryon_job(
                     overrides["finisher_backend"] = p.default_backend
     except Exception:
         pass
-    pipe = VFRPipeline.from_settings(settings, overrides=overrides)
+    global _PIPELINE
+    if _PIPELINE is None:
+        _PIPELINE = VFRPipeline.from_settings(settings, overrides=overrides)
+    pipe = _PIPELINE
     result = pipe.run(
         user_image_path=user_image_path,
         garment_front_path=garment_front_path,

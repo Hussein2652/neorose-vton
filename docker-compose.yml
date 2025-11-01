@@ -170,7 +170,7 @@ services:
       - S3_PREFIX=vfr/
       - RESULT_REDIRECT=1
       - VTON_EXPERT_URL=http://vton_expert:9010
-      - CUDA_VISIBLE_DEVICES=
+      - CUDA_VISIBLE_DEVICES=${API_CUDA_VISIBLE_DEVICES:-0}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -190,8 +190,8 @@ services:
       - ./storage:/app/storage
       - ./manual_downloads:/app/manual_downloads:ro
       - ./third_party:/app/third_party
-    # Run API on CPU to free GPU VRAM for expert
-    # gpus: ${GPU_REQUEST:-all}
+    # Allow API to use GPU (set GPU_REQUEST=all in .env)
+    gpus: ${GPU_REQUEST:-all}
 
   migrate:
     build:
@@ -266,7 +266,7 @@ services:
       - STABLEVITON_VERBOSE=1
       - STABLEVITON_FALLBACK=0
       - STABLEVITON_FORCE_FP16=1
-      - STABLEVITON_DENOISE_STEPS=100
+      - STABLEVITON_DENOISE_STEPS=200
       - STABLEVITON_DEBUG=1
       - STV_MAX_H=640
       - STV_MAX_W=512
