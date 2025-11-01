@@ -53,6 +53,16 @@ services:
       - IP_ADAPTER_SDXL_DIR=/app/storage/models/snapshots/h94-IP-Adapter/sdxl_models
       - IP_ADAPTER_SDXL_WEIGHTS_NAME=ip-adapter_sdxl.safetensors
       - IP_ADAPTER_GARMENT_SCALE=1.0
+      - IP_ADAPTER_FACE_SCALE=0.85
+      - SDXL_STEPS=50
+      - SDXL_GUIDANCE=6.0
+      - SDXL_REFINER_STEPS=20
+      - SDXL_REFINER_GUIDANCE=5.0
+      - CTRL_POSE=0.9
+      - CTRL_DEPTH=0.6
+      - CTRL_NORMAL=0.5
+      - CTRL_SEG=0.35
+      - CTRL_EDGE=0.4
       - HF_TOKEN=${HF_TOKEN}
       - HUGGINGFACE_TOKEN=${HF_TOKEN}
       - HUGGINGFACEHUB_API_TOKEN=${HF_TOKEN}
@@ -217,7 +227,7 @@ services:
       - PYTHONUNBUFFERED=1
       - CUDA_VISIBLE_DEVICES=0
       - STABLEVITON_WEIGHTS_DIR=/app/storage/models/stableviton/weights
-      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path /app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 512 --img_W 384 --save_dir {OUT} --unpair
+      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path /app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 640 --img_W 512 --save_dir {OUT} --unpair
       - SCHP_REPO_DIR=/app/third_party/schp/Self-Correction-Human-Parsing-master
       - SCHP_MODEL_PATH=/app/storage/models/schp_lip/20190826/exp-schp-201908261155-lip.pth
       - SCHP_INFER_CMD=python scripts/schp_infer.py --weights {WEIGHTS} --image {IMAGE} --out {OUT}
@@ -235,6 +245,8 @@ services:
       - STABLEVITON_FORCE_FP16=1
       - STABLEVITON_DENOISE_STEPS=50
       - STABLEVITON_DEBUG=1
+      - STV_MAX_H=640
+      - STV_MAX_W=512
     ports:
       - "9010:9010"
     volumes:

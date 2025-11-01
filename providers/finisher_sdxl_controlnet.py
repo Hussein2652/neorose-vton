@@ -92,6 +92,20 @@ class SDXLControlNetFinisher:
             if torch.cuda.is_available():
                 self._pipe = self._pipe.to(device)
 
+            # Optionally load SDXL refiner
+            try:
+                if self.refiner_path and os.path.exists(self.refiner_path):
+                    self._refiner = StableDiffusionXLImg2ImgPipeline.from_single_file(self.refiner_path, torch_dtype=dtype)
+                elif self.refiner_id:
+                    # Use local snapshot if offline
+                    self._refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                        self.refiner_id, torch_dtype=dtype, local_files_only=bool(os.environ.get("HF_HUB_OFFLINE"))
+                    )
+                if self._refiner is not None and torch.cuda.is_available():
+                    self._refiner = self._refiner.to(device)
+            except Exception:
+                self._refiner = None
+
             # Optional: Load IP-Adapter (image) for garment/detail conditioning
             # Prefer local snapshot dir for h94/IP-Adapter SDXL weights
             try:

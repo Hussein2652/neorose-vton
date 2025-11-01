@@ -1,12 +1,12 @@
 # Baseline hyperparameters and I/O contracts derived from the requirements PDF.
 
 finisher:
-  denoise: 0.20  # IMG2IMG_DENOISE
-  steps: 38
+  denoise: 0.12  # Lower to preserve details
+  steps: 50
   cfg: 6.2
   res_long: 1344
   backend: sdxl_controlnet  # local | kling | remote | sdxl | flux | sdxl_controlnet
-  escalate_on_fail: true
+  escalate_on_fail: false
   ctrl:
     pose: 0.90
     depth: 0.60

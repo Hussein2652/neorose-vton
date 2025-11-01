@@ -9,6 +9,13 @@ from fastapi.responses import Response, JSONResponse
 from PIL import Image, ImageFilter
 import numpy as np
 import math
+from typing import Tuple
+
+try:
+    # Optional DensePose helper (detectron2). Falls back if unavailable.
+    from .densepose_util import compute_densepose_image  # type: ignore
+except Exception:  # noqa: BLE001
+    compute_densepose_image = None  # type: ignore
 
 app = FastAPI(title="StableVITON Expert Service")
 
@@ -164,32 +171,34 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
         fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=6))
     fg_img.save(os.path.join(d_agn, im_name))
 
-    # Pseudo-DensePose: (u,v,dist) channels from mask for geometry cues
+    # DensePose map: prefer detectron2 if available, else pseudo (u,v,dist)
     try:
-        import cv2  # available in the expert image
-        h, w = m01.shape
-        ys, xs = np.mgrid[0:h, 0:w]
-        # Bounding box of the person mask
-        ys_nonzero, xs_nonzero = np.nonzero(m01)
-        if len(xs_nonzero) > 0:
-            x0, x1 = xs_nonzero.min(), xs_nonzero.max()
-            y0, y1 = ys_nonzero.min(), ys_nonzero.max()
+        dp_path = os.path.join(d_dp, im_name)
+        if compute_densepose_image is not None:
+            dpi = compute_densepose_image(user_im)
+            dpi.save(dp_path)
         else:
-            x0, x1, y0, y1 = 0, w - 1, 0, h - 1
-        u = (xs - x0) / max(1, (x1 - x0))
-        v = (ys - y0) / max(1, (y1 - y0))
-        u = np.clip(u, 0.0, 1.0)
-        v = np.clip(v, 0.0, 1.0)
-        # Distance transform inside the mask
-        dist = cv2.distanceTransform((m01 * 255).astype(np.uint8), cv2.DIST_L2, 3)
-        if dist.max() > 0:
-            dist = dist / dist.max()
-        dp_np = np.stack([u, v, dist], axis=2)
-        dp_rgb = (dp_np * 255.0).astype(np.uint8)
-        Image.fromarray(dp_rgb, mode='RGB').save(os.path.join(d_dp, im_name))
+            import cv2  # available in the expert image
+            h, w = m01.shape
+            ys, xs = np.mgrid[0:h, 0:w]
+            ys_nonzero, xs_nonzero = np.nonzero(m01)
+            if len(xs_nonzero) > 0:
+                x0, x1 = xs_nonzero.min(), xs_nonzero.max()
+                y0, y1 = ys_nonzero.min(), ys_nonzero.max()
+            else:
+                x0, x1, y0, y1 = 0, w - 1, 0, h - 1
+            u = (xs - x0) / max(1, (x1 - x0))
+            v = (ys - y0) / max(1, (y1 - y0))
+            u = np.clip(u, 0.0, 1.0)
+            v = np.clip(v, 0.0, 1.0)
+            dist = cv2.distanceTransform((m01 * 255).astype(np.uint8), cv2.DIST_L2, 3)
+            if dist.max() > 0:
+                dist = dist / dist.max()
+            dp_np = np.stack([u, v, dist], axis=2)
+            dp_rgb = (dp_np * 255.0).astype(np.uint8)
+            Image.fromarray(dp_rgb, mode='RGB').save(dp_path)
     except Exception:
-        dp = Image.new('RGB', user_im.size, color=(0, 0, 0))
-        dp.save(os.path.join(d_dp, im_name))
+        Image.new('RGB', user_im.size, color=(0, 0, 0)).save(os.path.join(d_dp, im_name))
 
     # gt_cloth_warped_mask: zeros for test
     z = Image.fromarray(np.zeros_like(m_np, dtype=np.uint8), mode='L')
@@ -242,6 +251,13 @@ def _infer_third_party(user_im: Image.Image, garment_im: Image.Image, mask_im: O
                 os.makedirs(o, exist_ok=True)
                 weights_dir = os.environ.get('STABLEVITON_WEIGHTS_DIR', os.path.join('storage','models','stableviton','weights'))
                 cmd = [s.replace('{DATA_ROOT}', root).replace('{OUT}', o).replace('{WEIGHTS_DIR}', weights_dir) for s in cmd_tpl.split(' ') if s]
+                # Adapt resolution to input while staying in safe caps (640x512) and /64 grid
+                Ht, Wt = _best_size_from_input(user_im.size, max_h=int(os.environ.get('STV_MAX_H', '640')), max_w=int(os.environ.get('STV_MAX_W', '512')))
+                for i, tok in enumerate(cmd):
+                    if tok == '--img_H' and i + 1 < len(cmd):
+                        cmd[i+1] = str(Ht)
+                    if tok == '--img_W' and i + 1 < len(cmd):
+                        cmd[i+1] = str(Wt)
                 try:
                     r = subprocess.run(cmd, check=True, capture_output=True, text=True)
                     if os.environ.get('STABLEVITON_VERBOSE') == '1':
