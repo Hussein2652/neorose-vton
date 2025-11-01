@@ -26,14 +26,27 @@ def compute_densepose_image(user_im: Image.Image) -> Image.Image:
 
     # Require config & weights from env for deterministic setup
     import os  # type: ignore
+    from detectron2 import model_zoo  # type: ignore
     cfg_file = os.environ.get("DENSEPOSE_CFG")
     weights_path = os.environ.get("DENSEPOSE_WEIGHTS")
-    if not cfg_file or not weights_path or (not os.path.exists(weights_path)):
-        raise ImportError("densepose config/weights not provided")
+    # Validate provided paths
+    def _valid_file(p: str | None, min_size: int = 1024) -> bool:
+        try:
+            return bool(p) and os.path.exists(p) and os.path.getsize(p) >= min_size  # type: ignore[arg-type]
+        except Exception:
+            return False
+    # Try provided cfg; else fall back to model_zoo packaged config
+    if not _valid_file(cfg_file, min_size=256):
+        try:
+            cfg_file = model_zoo.get_config_file("projects/DensePose/configs/densepose_rcnn_R_50_FPN_s1x.yaml")
+        except Exception as e:  # noqa: BLE001
+            raise ImportError("densepose config not available") from e
+    if not _valid_file(weights_path, min_size=1024):
+        raise ImportError("densepose weights not provided or too small")
     cfg = get_cfg()
     add_densepose_config(cfg)
-    cfg.merge_from_file(cfg_file)
-    cfg.MODEL.WEIGHTS = weights_path
+    cfg.merge_from_file(cfg_file)  # type: ignore[arg-type]
+    cfg.MODEL.WEIGHTS = weights_path  # type: ignore[assignment]
     # Users should bake detectron2+densepose model into the container for this path.
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     predictor = DefaultPredictor(cfg)

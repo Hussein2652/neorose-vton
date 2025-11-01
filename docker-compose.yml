@@ -227,7 +227,7 @@ services:
       - PYTHONUNBUFFERED=1
       - CUDA_VISIBLE_DEVICES=0
       - STABLEVITON_WEIGHTS_DIR=/app/storage/models/stableviton/weights
-      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path /app/third_party/stableviton/StableVITON-master/ckpts/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 640 --img_W 512 --save_dir {OUT} --unpair
+      - STABLEVITON_INFER_CMD=python /app/infer_wrapper.py --config_path third_party/stableviton/StableVITON-master/configs/VITONHD.yaml --model_load_path {WEIGHTS_DIR}/VITONHD_PBE_pose.ckpt --data_root_dir {DATA_ROOT} --batch_size 1 --img_H 640 --img_W 512 --save_dir {OUT} --unpair
       - SCHP_REPO_DIR=/app/third_party/schp/Self-Correction-Human-Parsing-master
       - SCHP_MODEL_PATH=/app/storage/models/schp_lip/20190826/exp-schp-201908261155-lip.pth
       - SCHP_INFER_CMD=python scripts/schp_infer.py --weights {WEIGHTS} --image {IMAGE} --out {OUT}
@@ -249,8 +249,15 @@ services:
       - STV_MAX_W=512
       - DENSEPOSE_CFG=${DENSEPOSE_CFG:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.yaml}
       - DENSEPOSE_WEIGHTS=${DENSEPOSE_WEIGHTS:-/app/storage/models/densepose/densepose_rcnn_R_50_FPN_s1x.pkl}
+      - DENSEPOSE_CFG_URL=${DENSEPOSE_CFG_URL:-https://raw.githubusercontent.com/facebookresearch/detectron2/main/projects/DensePose/configs/densepose_rcnn_R_50_FPN_s1x.yaml}
+      - DENSEPOSE_WEIGHTS_URL=${DENSEPOSE_WEIGHTS_URL:-https://dl.fbaipublicfiles.com/densepose/densepose_rcnn_R_50_FPN_s1x/165712039/model_final_162be9.pkl}
     ports:
       - "9010:9010"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9010 || curl -sf http://localhost:9010 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     volumes:
       - ./third_party:/app/third_party:ro
       - ./storage:/app/storage
