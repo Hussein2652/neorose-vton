@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import Response, JSONResponse
 from PIL import Image, ImageFilter
 import numpy as np
+import math
 
 app = FastAPI(title="StableVITON Expert Service")
 
@@ -102,17 +103,40 @@ def _build_onepair_dataset(user_im: Image.Image, garment_im: Image.Image, mask_i
             mask_im = Image.new('L', user_im.size, color=255)
     _save_image(mask_im, os.path.join(d_agnm, im_name.replace('.jpg', '_mask.png')), mode='L')
 
-    # Build agnostic-v3.2: blur masked user as a coarse canonical input
+    # Build agnostic-v3.2: preserve person, blur background
     u_np = np.array(user_im.convert('RGB'))
     m_np = np.array(mask_im.convert('L'))
     m01 = (m_np > 127).astype(np.uint8)
     fg = u_np * m01[:, :, None] + 128 * (1 - m01)[:, :, None]
-    fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=8))
+    fg_img = Image.fromarray(fg.astype(np.uint8), mode='RGB').filter(ImageFilter.GaussianBlur(radius=6))
     fg_img.save(os.path.join(d_agn, im_name))
 
-    # DensePose placeholder: zeros image (StableVITON uses it as a hint)
-    dp = Image.new('RGB', user_im.size, color=(0, 0, 0))
-    dp.save(os.path.join(d_dp, im_name))
+    # Pseudo-DensePose: (u,v,dist) channels from mask for geometry cues
+    try:
+        import cv2  # available in the expert image
+        h, w = m01.shape
+        ys, xs = np.mgrid[0:h, 0:w]
+        # Bounding box of the person mask
+        ys_nonzero, xs_nonzero = np.nonzero(m01)
+        if len(xs_nonzero) > 0:
+            x0, x1 = xs_nonzero.min(), xs_nonzero.max()
+            y0, y1 = ys_nonzero.min(), ys_nonzero.max()
+        else:
+            x0, x1, y0, y1 = 0, w - 1, 0, h - 1
+        u = (xs - x0) / max(1, (x1 - x0))
+        v = (ys - y0) / max(1, (y1 - y0))
+        u = np.clip(u, 0.0, 1.0)
+        v = np.clip(v, 0.0, 1.0)
+        # Distance transform inside the mask
+        dist = cv2.distanceTransform((m01 * 255).astype(np.uint8), cv2.DIST_L2, 3)
+        if dist.max() > 0:
+            dist = dist / dist.max()
+        dp_np = np.stack([u, v, dist], axis=2)
+        dp_rgb = (dp_np * 255.0).astype(np.uint8)
+        Image.fromarray(dp_rgb, mode='RGB').save(os.path.join(d_dp, im_name))
+    except Exception:
+        dp = Image.new('RGB', user_im.size, color=(0, 0, 0))
+        dp.save(os.path.join(d_dp, im_name))
 
     # gt_cloth_warped_mask: zeros for test
     z = Image.fromarray(np.zeros_like(m_np, dtype=np.uint8), mode='L')
