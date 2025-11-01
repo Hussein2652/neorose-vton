@@ -77,10 +77,12 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
             continue
 
         # Ensure VAE is on CUDA for encode/get_input while UNet/Control remain on CPU
+        # For fp16, cast VAE to half to avoid bias/input dtype mismatch in xformers
         if "z, c = model.get_input(batch, params.first_stage_key)" in line:
             indent = line[: len(line) - len(line.lstrip())]
             out.append(f"{indent}# Low VRAM: VAE on CUDA, UNet on CPU for encode\n")
             out.append(f"{indent}model.low_vram_shift(False)\n")
+            out.append(f"{indent}model.first_stage_model = model.first_stage_model.half() if args.fp16 else model.first_stage_model.float()\n")
             out.append(f"{indent}with autocast(enabled=args.fp16, dtype=torch.float16 if args.fp16 else torch.float32):\n")
             out.append(f"{indent}    {line.lstrip()}")
             continue
@@ -90,8 +92,11 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
             # Insert with autocast at the same indentation
             indent = line[: len(line) - len(line.lstrip())]
             if not inserted_low_vram_before_sample:
-                out.append(f"{indent}# Low VRAM: UNet/Control on CUDA, VAE on CPU for sampling\n")
+                out.append(f"{indent}# Low VRAM: move UNet/Control to CUDA for sampling\n")
                 out.append(f"{indent}model.low_vram_shift(True)\n")
+                out.append(f"{indent}# Ensure VAE is also on CUDA during sampling to avoid CPU attention ops\n")
+                out.append(f"{indent}model.first_stage_model = model.first_stage_model.cuda()\n")
+                out.append(f"{indent}model.first_stage_model = (model.first_stage_model.half() if args.fp16 else model.first_stage_model.float())\n")
                 inserted_low_vram_before_sample = True
             out.append(f"{indent}with autocast(enabled=args.fp16, dtype=torch.float16 if args.fp16 else torch.float32):\n")
             out.append(f"{indent}    {line.lstrip()}")
@@ -172,6 +177,10 @@ def main() -> None:
     if use_fp16:
         cmd.append("--fp16")
     cmd.extend(unknown)
+    # Apply denoise steps override (default to 30 if not provided)
+    denoise_steps = os.environ.get("STABLEVITON_DENOISE_STEPS", "30")
+    if denoise_steps:
+        cmd.extend(["--denoise_steps", str(denoise_steps)])
     verbose = os.environ.get("STABLEVITON_VERBOSE") == "1"
     try:
         env = os.environ.copy()
@@ -194,7 +203,8 @@ def main() -> None:
         err = (e.stderr or "") + "\n" + (e.stdout or "")
         if "out of memory" in err.lower():
             try:
-                sizes = [(288, 216), (256, 192), (224, 168)]
+                # Only use multiples of 64 to keep U-Net skip shapes aligned
+                sizes = [(320, 256), (256, 192), (192, 128)]
                 for h, w in sizes:
                     print(f"[infer_wrapper] Retrying with smaller size {h}x{w}", file=sys.stderr)
                     cmd2 = list(cmd)
