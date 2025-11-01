@@ -69,8 +69,8 @@ def _patch_infer_script(src_path: str, enable_fp16: bool) -> str:
 
         # Replace model.cuda() with conditional half().cuda()
         if (not replaced_cuda) and "model = model.cuda()" in line:
-            indent = line[: len(line) - len(line.lstrip())]
-            out.append(f"{indent}model = model.half().cuda() if args.fp16 else model.cuda()\n")
+            # Keep original dtype; rely on autocast to avoid input/weight dtype mismatch
+            out.append(line)
             replaced_cuda = True
             continue
 
