@@ -70,12 +70,14 @@ class SDXLControlNetFinisher:
 
             # Load ControlNet: prefer offline union snapshot dir; else try configured list; else none
             controlnet = None
-            if self.cn_union_dir and os.path.isdir(self.cn_union_dir):
+            # Prefer explicit CN IDs when provided; only use union snapshot when explicitly enabled
+            use_union = os.environ.get("USE_CONTROLNET_UNION", "0") in ("1", "true", "yes")
+            if use_union and self.cn_union_dir and os.path.isdir(self.cn_union_dir):
                 try:
                     controlnet = ControlNetModel.from_pretrained(self.cn_union_dir, torch_dtype=dtype, local_files_only=True)
                 except Exception:
                     controlnet = None
-            if controlnet is None and self.cn_ids:
+            if (controlnet is None) and self.cn_ids:
                 cns = []
                 for mid in self.cn_ids:
                     try:
@@ -104,8 +106,21 @@ class SDXLControlNetFinisher:
 
             if torch.cuda.is_available():
                 self._pipe = self._pipe.to(device)
+                try:
+                    self._pipe.enable_xformers_memory_efficient_attention()
+                except Exception:
+                    pass
+            try:
+                self._pipe.enable_vae_slicing()
+                self._pipe.enable_vae_tiling()
+            except Exception:
+                pass
             # Keep a base-only pipeline for fallback render if ControlNet path fails at runtime
             self._base = base_pipe.to(device) if torch.cuda.is_available() else base_pipe
+            try:
+                self._base.enable_vae_slicing(); self._base.enable_vae_tiling()
+            except Exception:
+                pass
 
             # Optionally load SDXL refiner
             try:
@@ -276,6 +291,12 @@ class SDXLControlNetFinisher:
             )
             if control_images:
                 call_kwargs["controlnet_conditioning_scale"] = control_scales
+            if os.environ.get("SDXL_DEBUG", "0") == "1":
+                try:
+                    import sys
+                    print(f"[SDXL finisher] controls={len(control_images)} scales={control_scales} strength={strength}", file=sys.stderr)
+                except Exception:
+                    pass
             # If IP-Adapter(s) loaded and we have images, pass them (list supports multi-adapter in newer APIs)
             try:
                 if (getattr(self, '_has_ip_adapter', False) or getattr(self, '_has_faceid_adapter', False)) and ip_adapter_images:

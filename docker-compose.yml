@@ -66,6 +66,8 @@ services:
       - FINISHER_RESIZE_LONG=1280
       - SDXL_BLEND_PRESERVE_OUTSIDE=1
       - SDXL_BLEND_PRESERVE_KERNEL=21
+      # Prefer separate ControlNets (pose+depth+canny) over union for stability
+      - SDXL_CN_IDS=diffusers/controlnet-openpose-sdxl-1.0,diffusers/controlnet-depth-sdxl-1.0,diffusers/controlnet-canny-sdxl-1.0
       - CTRL_POSE=0.9
       - CTRL_DEPTH=0.6
       - CTRL_NORMAL=0.5
@@ -140,6 +142,7 @@ services:
       - FINISHER_RESIZE_LONG=1280
       - SDXL_BLEND_PRESERVE_OUTSIDE=1
       - SDXL_BLEND_PRESERVE_KERNEL=21
+      - SDXL_CN_IDS=diffusers/controlnet-openpose-sdxl-1.0,diffusers/controlnet-depth-sdxl-1.0,diffusers/controlnet-canny-sdxl-1.0
       - HF_TOKEN=${HF_TOKEN}
       - HUGGINGFACE_TOKEN=${HF_TOKEN}
       - HUGGINGFACEHUB_API_TOKEN=${HF_TOKEN}

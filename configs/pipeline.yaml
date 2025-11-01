@@ -1,7 +1,7 @@
 # Baseline hyperparameters and I/O contracts derived from the requirements PDF.
 
 finisher:
-  denoise: 0.12  # Lower to preserve details
+  denoise: 0.08  # Lower to preserve details
   steps: 50
   cfg: 6.2
   res_long: 1344
