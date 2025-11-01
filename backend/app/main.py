@@ -19,6 +19,8 @@ from .billing import router as billing_router
 from .validators import enforce_max_upload_size
 from .artifacts import ensure_artifact, ArtifactSpec, ingest_manual_assets
 import yaml
+import json
+import time
 import threading
 import logging
 try:
@@ -355,6 +357,64 @@ def admin_set_flag(key: str, value: str, description: str | None = None, request
 
     set_feature_flag(key, value, description)
     return {"ok": True}
+
+
+# GPU lock admin endpoints (cooperative GPU scheduling)
+def _gpu_lock_path() -> str:
+    locks_dir = os.environ.get("LOCKS_DIR", os.path.join("storage", "locks"))
+    os.makedirs(locks_dir, exist_ok=True)
+    return os.path.join(locks_dir, "gpu.lock")
+
+
+@app.get("/v1/admin/gpu-lock/status")
+def admin_gpu_lock_status(request=Depends(lambda r: r)):
+    _require_admin(request)
+    p = _gpu_lock_path()
+    if not os.path.exists(p):
+        return {"status": "free"}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["status"] = "reserved"
+        if "ts" in data:
+            data["age_sec"] = round(time.time() - float(data["ts"]), 3)
+        return data
+    except Exception:
+        return {"status": "reserved"}
+
+
+@app.post("/v1/admin/gpu-lock/acquire")
+def admin_gpu_lock_acquire(owner: str | None = None, request=Depends(lambda r: r)):
+    _require_admin(request)
+    p = _gpu_lock_path()
+    if os.path.exists(p):
+        raise HTTPException(status_code=409, detail="already reserved")
+    data = {"owner": owner or "api-admin", "pid": os.getpid(), "ts": time.time()}
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    return {"status": "acquired"}
+
+
+@app.post("/v1/admin/gpu-lock/release")
+def admin_gpu_lock_release(owner: str | None = None, force: bool = False, request=Depends(lambda r: r)):
+    _require_admin(request)
+    p = _gpu_lock_path()
+    if not os.path.exists(p):
+        return {"status": "already_free"}
+    if not force:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cur = data.get("owner")
+            if owner and cur != owner:
+                raise HTTPException(status_code=409, detail=f"lock held by {cur}; set force=true to override")
+        except Exception:
+            pass
+    try:
+        os.remove(p)
+        return {"status": "released"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/v1/admin/models")
