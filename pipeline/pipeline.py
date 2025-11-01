@@ -16,7 +16,6 @@ from providers.local_stub import (
     LocalPostProcessor,
     LocalQA,
 )
-from providers.kling_api import KlingFinisher
 from .controls import build_controls
 from .vton_expert import apply_vton
 from providers.vton_local import LocalVTON
@@ -64,7 +63,11 @@ class VFRPipeline:
             self.geometry = LocalGeometryFitter()
         backend = self.cfg.get("finisher_backend", "local")
         if backend == "kling":
-            self.finisher = KlingFinisher()
+            # Kling disabled: fall back to SDXL ControlNet or local
+            try:
+                self.finisher = SDXLControlNetFinisher()
+            except Exception:
+                self.finisher = LocalFinisher()
         elif backend == "remote":
             try:
                 self.finisher = RemoteFinisher()
@@ -246,12 +249,6 @@ class VFRPipeline:
             except Exception:
                 pass
 
-        # Optional escalation to Kling after retries
-        if (not last_scores or not last_scores.get("passed")) and self.cfg.get("escalate_on_fail"):
-            fin_dir = os.path.join(work_root, "finisher_kling")
-            kling = KlingFinisher()
-            polished_path = kling.process(draped.soft_render_path, fin_dir, denoise=denoise)
-            post_dir = os.path.join(work_root, "post_kling")
-            final_path = self.post.process(polished_path, post_dir)
+        # Kling escalation disabled
 
         return VFRRunResult(output_path=final_path)

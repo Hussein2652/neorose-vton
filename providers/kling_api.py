@@ -32,7 +32,8 @@ class KlingFinisher:
         os.makedirs(out_dir, exist_ok=True)
         im = Image.open(soft_render_path).convert("RGB")
         # Simulated premium pass: detail, bloom, contrast, color
-        im = im.filter(ImageFilter.Detail())
+        # PIL uses uppercase constants for builtin filters
+        im = im.filter(ImageFilter.DETAIL)
         im = im.filter(ImageFilter.GaussianBlur(radius=max(1, int(denoise * 6))))
         im = ImageEnhance.Contrast(im).enhance(1.10)
         im = ImageEnhance.Color(im).enhance(1.05)
